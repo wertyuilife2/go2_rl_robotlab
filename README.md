@@ -32,10 +32,10 @@ Use the following commands to train and play:
 
 ```bash
 # Train
-python scripts/reinforcement_learning/rsl_rl/train.py --task=Robotlab-Go2-v0 --headless --num_envs=4096
+python scripts/reinforcement_learning/rsl_rl/train.py --task=RobotLab-Go2-v0 --headless
 
 # Play
-python scripts/reinforcement_learning/rsl_rl/play.py --task=Robotlab-Go2-v0 --num_envs=1024
+python scripts/reinforcement_learning/rsl_rl/play.py --task=RobotLab-Go2-v0
 ```
 
 ## Configuration
@@ -46,6 +46,28 @@ python scripts/reinforcement_learning/rsl_rl/play.py --task=Robotlab-Go2-v0 --nu
 
 3. Modify `source/robot_lab/robot_lab/tasks/go2/__init__.py` to add your own task with new config.
 
+4. Add args in commands to override above configs, for example:
+
+    ```
+    --experiment_name=moe_cts
+    --run_name=v1
+    --num_envs=16384
+    --resume
+    --checkpoint=path/to/your/checkpoint
+    ```
+    for more usage, see [robot_lab](https://github.com/fan-ziqi/robot_lab.git).
+
+## Differences with `go2_rl_gym`
+
+- Terrain's composition are different(see code).
+
+- Rewards
+  - feet_regulation are lacked.
+  - dof_pos_limits are lacked.
+  - tracking reward are different (fixed sigma vs. dynamic sigma).
+
+- Terminations:
+  - contact termination are lacked.
 
 ## Acknowledgements
 This repository would not exist without the following open-source projects:

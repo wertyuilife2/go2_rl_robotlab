@@ -37,7 +37,7 @@ FOOT_LINK_NAME = ".*_foot"
 
 TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
-    border_width=20.0,
+    border_width=25.0,
     num_rows=10,
     num_cols=20,
     horizontal_scale=0.1,
@@ -47,7 +47,7 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     sub_terrains={
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.15,
-            step_height_range=(0.05, 0.23),
+            step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=3.0,
             border_width=1.0,
@@ -55,24 +55,24 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
             proportion=0.20,
-            step_height_range=(0.05, 0.23),
+            step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=3.0,
             border_width=1.0,
             holes=False,
         ),
         "boxes": terrain_gen.MeshRandomGridTerrainCfg(
-            proportion=0.15, grid_width=0.45, grid_height_range=(0.05, 0.2), platform_width=2.0
+            proportion=0.15, grid_width=0.45, grid_height_range=(0.01, 0.15), platform_width=2.0
         ),
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.1, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
+            proportion=0.15, noise_range=(0.01, 0.1), noise_step=0.01, border_width=0.25
         ),
-        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.2),
+        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.15),
         "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
+            proportion=0.1, slope_range=(0.0, 0.5), platform_width=2.0, border_width=0.25
         ),
         "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
+            proportion=0.1, slope_range=(0.0, 0.5), platform_width=2.0, border_width=0.25
         ),
     },
 )
@@ -112,15 +112,6 @@ class Go2SceneCfg(InteractiveSceneCfg):
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
-        debug_vis=False,
-        mesh_prim_paths=["/World/ground"],
-    )
-    
-    height_scanner_base = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=(0.1, 0.1)),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
@@ -199,7 +190,7 @@ class ActionsCfg:
         joint_names=JOINT_NAMES, 
         scale={".*_hip_joint": 0.25, "^(?!.*_hip_joint).*": 0.25}, 
         use_default_offset=True, 
-        clip=None, 
+        clip={".*": (-100.0, 100.0)}, 
         preserve_order=True
     )
 
@@ -337,42 +328,38 @@ class EventCfg:
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME), # Override
+            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
             "mass_distribution_params": (-1.0, 1.0),
             "operation": "add",
             "recompute_inertia": True,
         },
     )
-
     randomize_rigid_body_mass_others = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="^(?!.*base).*"), # Override
-            "mass_distribution_params": (0.8, 1.2),
+            "asset_cfg": SceneEntityCfg("robot", body_names="^(?!.*base).*"), 
+            "mass_distribution_params": (0.9, 1.1),
             "operation": "scale",
             "recompute_inertia": True,
         },
     )
-
     randomize_com_positions = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME), # Override
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
+            "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
         },
     )
-
     randomize_com_positions_other = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="^(?!.*base).*"), # Override
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+            "asset_cfg": SceneEntityCfg("robot", body_names="^(?!.*base).*"), 
+            "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
         },
     )
-
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
@@ -381,8 +368,6 @@ class EventCfg:
             "velocity_range": (0.0, 0.0),
         },
     )
-    
-    # when use DelayedPDActuator, the range should be narrowed, range that is too wide like (0.5, 2.0) will cause training to fail.
     randomize_actuator_gains = EventTerm(
         func=mdp.randomize_actuator_gains,
         mode="reset",
@@ -400,23 +385,13 @@ class EventCfg:
         interval_range_s=(4.0, 4.0),
         params={
             "velocity_range": {
-                "x": (-0.5, 0.5), 
-                "y": (-0.5, 0.5),
-                "roll": (-0.7, 0.7),
-                "pitch": (-0.7, 0.7),
-                "yaw": (-0.7, 0.7)
+                "x": (-0.4, 0.4), 
+                "y": (-0.4, 0.4),
+                "roll": (-0.6, 0.6),
+                "pitch": (-0.6, 0.6),
+                "yaw": (-0.6, 0.6)
             }
         }
-    )
-    randomize_rigid_body_mass_base = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "mass_distribution_params": (-5.0, 10.0),
-            "operation": "add",
-            "recompute_inertia": True,
-        },
     )
     randomize_rigid_body_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
@@ -426,32 +401,8 @@ class EventCfg:
             "static_friction_range": (0.5, 1.5),
             "dynamic_friction_range": (0.5, 1.5),
             "restitution_range": (0.0, 0.5),
-            "num_buckets": 512,
+            "num_buckets": 64,
             "make_consistent": True
-        },
-    )        
-    randomize_apply_external_force_torque = EventTerm(
-        func=mdp.apply_external_force_torque,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "force_range": (-10.0, 10.0),
-            "torque_range": (-10.0, 10.0),
-        },
-    )
-    reset_base = EventTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.0, 0.2), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
-                "z": (-0.5, 0.5),
-                "roll": (-0.5, 0.5),
-                "pitch": (-0.5, 0.5),
-                "yaw": (-0.5, 0.5),
-            },
         },
     )
 
@@ -483,7 +434,7 @@ class RewardsCfg:
     
     base_height_l2 = RewTerm(
         func=mdp.base_height_l2,
-        weight=-50.0, 
+        weight=-1.0, 
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
             "target_height": 0.38
@@ -508,7 +459,7 @@ class RewardsCfg:
 
     hip_pos_penalty = RewTerm(
         func=mdp.hip_pos_penalty,
-        weight=-0.85,
+        weight=-0.05,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hip_joint"),
@@ -533,20 +484,16 @@ class RewardsCfg:
 class TerminationsCfg:
     """Termination terms for the MDP."""
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    bad_orientation = DoneTerm(
-        func=mdp.bad_orientation,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "limit_angle": 2 * math.pi / 3
-        },
-    )
 
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel_gym)
     base_linear_velocity = CurrTerm(mdp.gradual_reward_weight_modification, params={
-        "term_name": "lin_vel_z_l2", "initial_weight": -2.0, "final_weight": -0.0, "start_it": 0, "end_it": 2000
+        "term_name": "lin_vel_z_l2", "initial_weight": -2.0, "final_weight": -0.0, "start_it": 0, "end_it": 1500
+        })
+    base_linear_velocity = CurrTerm(mdp.gradual_reward_weight_modification, params={
+        "term_name": "base_height_l2", "initial_weight": -1.0, "final_weight": -10.0, "start_it": 0, "end_it": 5000
         })
     ref_stand_envs = CurrTerm(mdp.gradual_ref_stand_modification, params={
         "term_name": "base_velocity", "initial": 0.0, "final": 0.1, "start_it": 0, "end_it": 1500
@@ -565,7 +512,7 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
     """Merged configuration for the Go2 robot on rough terrain."""
 
     # Scene settings
-    scene: Go2SceneCfg = Go2SceneCfg(num_envs=8192, env_spacing=2.5)
+    scene: Go2SceneCfg = Go2SceneCfg(num_envs=8192, env_spacing=0.5)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -596,14 +543,6 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
             self.scene.height_scanner.update_period = self.decimation * self.sim.dt
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
-
-        # Scale down terrain grid for small robot
-        if self.scene.terrain.terrain_generator is not None:
-            if "boxes" in self.scene.terrain.terrain_generator.sub_terrains:
-                self.scene.terrain.terrain_generator.sub_terrains["boxes"].grid_height_range = (0.025, 0.1)
-            if "random_rough" in self.scene.terrain.terrain_generator.sub_terrains:
-                self.scene.terrain.terrain_generator.sub_terrains["random_rough"].noise_range = (0.01, 0.06)
-                self.scene.terrain.terrain_generator.sub_terrains["random_rough"].noise_step = 0.01
 
         # Handle curriculum for terrain generator
         if getattr(self.curriculum, "terrain_levels", None) is not None:
