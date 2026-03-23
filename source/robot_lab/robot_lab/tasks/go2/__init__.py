@@ -23,7 +23,6 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.env_cfg:Go2EnvCfg",
-        # "env_cfg_entry_point": f"{__name__}.origin_env_cfg:UnitreeGo2RoughEnvCfg",
         "rsl_rl_cfg_entry_point": f"{__name__}.rsl_rl_cfg:MoECTSRunnerCfg",
     },
 )

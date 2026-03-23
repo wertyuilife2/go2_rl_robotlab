@@ -4,11 +4,11 @@
 
 Train Unitree Go2 with MoE-CTS.
 
-This is a reproduction version of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym) on robotlab/isaaclab.
+This is a reproduction version of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym) on RobotLab/IsaacLab.
 
 ## Installation Guide
 
-### 1. Base Installation
+### 1. Install IsaacLab
 Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
 
 Notice that we use certain version of IsaacLab packages, make sure:
@@ -18,8 +18,8 @@ isaaclab <= 0.53.1 # tested on 0.53.1
 isaaclab-rl <= 0.4.7 # tested on 0.4.7
 ```
 
-### 2. Modified Library Setup
-This branch uses a customized version of `rsl_rl` and `robot_lab`. To install it, run the following commands in your terminal:
+### 2. Install customized RSL-RL and RobotLab
+We uses a customized version of `rsl_rl` and `robot_lab`. To install it, run the following commands:
 
 ```bash
 python -m pip install -e source/robot_lab
@@ -28,14 +28,31 @@ python -m pip install -e source/rsl_rl
 
 ## Try examples
 
-You can use the following commands to run all environments:
-
-RSL-RL:
+Use the following commands to train and play:
 
 ```bash
 # Train
-python scripts/reinforcement_learning/rsl_rl/train.py --task=<ENV_NAME> --headless
+python scripts/reinforcement_learning/rsl_rl/train.py --task=Robotlab-Go2-v0 --headless --num_envs=4096
 
 # Play
-python scripts/reinforcement_learning/rsl_rl/play.py --task=<ENV_NAME>
+python scripts/reinforcement_learning/rsl_rl/play.py --task=Robotlab-Go2-v0 --num_envs=1024
 ```
+
+## Configuration
+
+1. Modify `source/robot_lab/robot_lab/tasks/go2/env_cfg.py` for environment config.
+
+2. Modify `source/robot_lab/robot_lab/tasks/go2/rsl_rl_cfg.py` for algorithm config.
+
+3. Modify `source/robot_lab/robot_lab/tasks/go2/__init__.py` to add your own task with new config.
+
+
+## Acknowledgements
+This repository would not exist without the following open-source projects:
+
+- [isaac_lab](https://github.com/isaac-sim/IsaacLab): Unified framework for robot learning built on NVIDIA Isaac Sim.
+- [rsl_rl](https://github.com/leggedrobotics/rsl_rl.git): Reinforcement learning algorithms.
+- [robot_lab](https://github.com/fan-ziqi/robot_lab.git): RL Extension Library for Robots, Based on IsaacLab.
+
+Related publications implemented in this repo:
+- [CTS: Concurrent Teacher-Student Reinforcement Learning for Legged Locomotion](https://arxiv.org/pdf/2405.10830)
