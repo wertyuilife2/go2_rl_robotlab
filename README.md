@@ -2,23 +2,23 @@
 
 ## Overview
 
-Train Unitree Go2 with MoE-CTS and deploy it on MuJoCo.
+Train Unitree Go2 with MoE-CTS on IsaacLab and deploy it to MuJoCo.
 
 This is a reproduction version of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym) on RobotLab/IsaacLab.
 
 ## Installation Guide
 
 ### 1. Install IsaacLab
-Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
+Install IsaacLab 2.3.0 release by following the [installation guide](https://isaac-sim.github.io/IsaacLab/release/2.3.0/source/setup/installation/pip_installation.html#).
 
-Notice that we use certain version of IsaacLab packages, newer versions may cause compatibility issues with `rsl_rl` and `robot_lab`. 
-
-Please make sure to use the following versions or older ones:
+After installation, your environment should satisfy the following requirements:
 ```
 isaacsim <= 5.1.0.0 # tested on 5.1.0.0
 isaaclab <= 0.53.1 # tested on 0.53.1
 isaaclab-rl <= 0.4.7 # tested on 0.4.7
 ```
+
+Higher version may cause conflicts with our customized `rsl_rl==3.3.0` and `robot_lab==2.3.0`.
 
 ### 2. Install customized RSL-RL and RobotLab
 We uses a customized version of `rsl_rl` and `robot_lab`. To install it, run the following commands:

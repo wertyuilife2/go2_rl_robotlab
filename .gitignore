@@ -71,14 +71,12 @@ __pycache__/
 .DS_Store
 
 # ML checkpoints / datasets
-*.pt
 *.pth
 *.onnx
 *.npz
 *.npy
 
 # Large ML artifacts (do not commit)
-*.pt
 *.pth
 *.ckpt
 *.onnx

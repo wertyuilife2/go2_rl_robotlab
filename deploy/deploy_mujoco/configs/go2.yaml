@@ -1,4 +1,4 @@
-policy_path: "{ROOT_DIR}/deploy/pretrain/go2/wyh/go2_moe_cts_1500.pt"
+policy_path: "{ROOT_DIR}/deploy/pretrain/go2/go2_moe_cts_1500.pt"
 xml_path: "{ROOT_DIR}/resources/go2/stairs.xml"
 
 # Total simulation time
