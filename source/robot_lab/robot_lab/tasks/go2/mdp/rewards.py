@@ -555,3 +555,71 @@ def hip_pos_penalty(
         stand_still_scale * running_reward
     )
     return reward
+
+def feet_regulation(
+    env: ManagerBasedRLEnv,
+    base_height_target: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+
+    asset: RigidObject = env.scene[asset_cfg.name]
+    feet_ids = asset_cfg.body_ids
+
+    feet_pos_w = asset.data.body_link_pos_w[:, feet_ids, :]
+    base_pos_w = asset.data.root_link_pos_w.unsqueeze(1)
+    feet_xy_vel_w = asset.data.body_lin_vel_w[:, feet_ids, :2]
+
+    base_z = asset.data.root_link_pos_w[:, 2]
+
+    if sensor_cfg is not None:
+        sensor: RayCaster = env.scene[sensor_cfg.name]
+        ray_hits_z = sensor.data.ray_hits_w[..., 2]
+
+        invalid = (
+            torch.isnan(ray_hits_z).any(dim=1)
+            | torch.isinf(ray_hits_z).any(dim=1)
+            | (torch.max(torch.abs(ray_hits_z), dim=1).values > 1e6)
+        )
+
+        estimated_ground_z = torch.mean(ray_hits_z, dim=1)
+        fallback_ground_z = base_z - base_height_target
+        estimated_ground_z = torch.where(invalid, fallback_ground_z, estimated_ground_z)
+    else:
+        estimated_ground_z = base_z - base_height_target
+
+    base_height = base_z - estimated_ground_z
+
+    gravity_w = torch.tensor(env.sim.cfg.gravity, device=env.device, dtype=feet_pos_w.dtype)
+    up_w = -gravity_w / torch.norm(gravity_w)
+
+    delta_feet_w = feet_pos_w - base_pos_w
+    feet2base_height = torch.sum(delta_feet_w * up_w.view(1, 1, 3), dim=-1)
+
+    feet_height = torch.clamp(base_height.unsqueeze(1) - feet2base_height, min=0.0)
+
+    reward = (
+        feet_xy_vel_w.pow(2).sum(dim=-1)
+        * torch.exp(-feet_height / (0.025 * base_height_target))
+    ).sum(dim=-1)
+
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+
+    return reward
+
+def dof_pos_limits(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    asset = env.scene[asset_cfg.name]
+    
+    joint_pos = asset.data.joint_pos
+    joint_limits = asset.data.soft_joint_pos_limits
+
+    lower = joint_limits[..., 0]
+    upper = joint_limits[..., 1]
+
+    out_of_limits = -(joint_pos - lower).clamp(max=0.0)
+    out_of_limits += (joint_pos - upper).clamp(min=0.0)
+
+    return torch.sum(out_of_limits, dim=1)

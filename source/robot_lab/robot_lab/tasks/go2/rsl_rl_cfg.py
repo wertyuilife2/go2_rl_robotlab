@@ -39,14 +39,14 @@ class RslRlMoeCtsActorCriticCfg(RslRlPpoActorCriticCfg):
     expert_num = 8 # number of experts in the student model
     latent_dim = 32
     norm_type = 'l2norm' # normalization type for encoders: l2norm, simnorm
-    teacher_encoder_hidden_dims = [512, 256, 128]
-    student_encoder_hidden_dims = [512, 256, 128]
+    teacher_encoder_hidden_dims = [512, 256]
+    student_encoder_hidden_dims = [512, 256, 256]
     actor_hidden_dims=[512, 256, 128]
     critic_hidden_dims=[512, 256, 128]
     activation="elu"
     actor_obs_normalization = False
     critic_obs_normalization = False
-    
+
 @configclass
 class RslRlMoeCtsAlgorithmCfg(RslRlPpoAlgorithmCfg):
     class_name = "MoECTS"

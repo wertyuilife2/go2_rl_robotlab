@@ -60,14 +60,7 @@ python scripts/reinforcement_learning/rsl_rl/play.py --task=RobotLab-Go2-v0
 ## Differences with `go2_rl_gym`
 
 - Terrain's composition are different(see code).
-
-- Rewards
-  - feet_regulation are lacked.
-  - dof_pos_limits are lacked.
-  - tracking reward are different (fixed sigma vs. dynamic sigma).
-
-- Terminations:
-  - contact termination are lacked.
+- tracking reward are different (fixed sigma vs. dynamic sigma).
 
 ## Acknowledgements
 This repository would not exist without the following open-source projects:
