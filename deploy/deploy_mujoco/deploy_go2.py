@@ -174,6 +174,11 @@ def setup_viewer_camera(viewer) -> None:
     viewer.cam.elevation = -30.0
     viewer.cam.azimuth = 0.0
 
+def display_current_command(cmd: np.ndarray) -> None:
+    """Refresh the current command on the same terminal line."""
+    cmd_text = f"\rCurrent command | vx: {cmd[0]: .3f}  vy: {cmd[1]: .3f}  wz: {cmd[2]: .3f}"
+    print(cmd_text, end="", flush=True)
+
 
 # ============================================================================
 # Main
@@ -239,6 +244,8 @@ def main():
 
     # Initialize joystick
     joystick, use_joystick = init_joystick()
+    display_current_command(cmd)
+
 
     # Prepare video output
     VIDEO_DIR.mkdir(parents=True, exist_ok=True)
@@ -359,7 +366,8 @@ def main():
                 latest_target_pos = apply_action(action, default_angles, scales["action_pos"])
                 pos_history.append(latest_target_pos.copy())
                 target_dof_pos = sample_delayed_targets(pos_history, delay_min, delay_max, delay_rng)
-
+                display_current_command(cmd)
+                
             # Sync viewer
             if counter % render_substeps == 0:
                 viewer.sync()
@@ -368,6 +376,7 @@ def main():
             sleep_time = sim_cfg["dt"] - (time.time() - step_start) - 0.1
             if sleep_time > 0:
                 time.sleep(sleep_time)
+    print()
 
     # Cleanup
     if writer:
