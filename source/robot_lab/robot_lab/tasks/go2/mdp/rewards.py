@@ -534,7 +534,7 @@ def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scen
     return reward
 
 
-def hip_pos_penalty(
+def hip_pos_penalty_l1(
         env: ManagerBasedRLEnv,
         command_name: str,
         asset_cfg: SceneEntityCfg,
@@ -547,7 +547,7 @@ def hip_pos_penalty(
     command = env.command_manager.get_command(command_name)[:, [1, 2]]
     cmd_large = torch.any(torch.abs(command) > command_threshold, dim=1)
     running_reward = torch.linalg.norm(
-        (asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1
+        (asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1, ord=1
     )
     reward = torch.where(
         cmd_large,
