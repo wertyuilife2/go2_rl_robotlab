@@ -159,6 +159,8 @@ xml_path: "{ROOT_DIR}/resources/go2/your-custom-scene.xml"
 
 - Different terrain composition
 - Different tracking reward formulation (fixed sigma vs. dynamic sigma)
+- Lack domain_rand: randomize_motor_zero_offset
+- Lack domain_rand: randomize_motor_strength
 
 ---
 
