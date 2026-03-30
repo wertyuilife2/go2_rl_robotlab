@@ -64,7 +64,7 @@ class ActionDelayGo2Env(ManagerBasedRLEnv):
             self._sim_step_counter += 1
             
             # determine which envs should apply delayed action at this decimation step
-            action_delay_masks = (i <= actions_start_decimation)
+            action_delay_masks = (i < actions_start_decimation)
             self.action_manager.process_action_with_delay(action_delay_masks)
                 
             # set actions into buffers
