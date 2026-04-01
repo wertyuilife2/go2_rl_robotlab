@@ -17,3 +17,4 @@ from .events import *  # noqa: F401, F403
 from .observations import *  # noqa: F401, F403
 from .rewards import *  # noqa: F401, F403
 from .utils import *  # noqa: F401, F403
+from .commands_go2_rl_gym import *  # noqa: F401, F403

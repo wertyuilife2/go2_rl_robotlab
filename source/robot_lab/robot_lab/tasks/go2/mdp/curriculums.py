@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    from robot_lab.tasks.go2.mdp.commands_go2_rl_gym import Go2RLGymCommand
 
 
 def command_levels_lin_vel(
@@ -200,13 +201,13 @@ def terrain_levels_vel_gym(env: ManagerBasedRLEnv, env_ids: Sequence[int]) -> fl
     使用 max_move_distance 而非 reset 时的瞬间位移, 比较标准基于 commands_xy_accumulation
     """
     terrain = env.scene.terrain
-    command = env.command_manager.get_term("base_velocity")
+    command: Go2RLGymCommand = env.command_manager.get_term("base_velocity")
 
     max_move_dist = command.max_move_distance[env_ids]
     cmd_accum = command.commands_xy_accumulation[env_ids]
     
-    resampling_time = command.cfg.resampling_time_range[0]
-    zero_prob = command.cfg.rel_standing_envs 
+    resampling_time = command.cfg.resampling_time
+    zero_prob = command.zero_command_prob
     
     move_up = max_move_dist > terrain.cfg.terrain_generator.size[0] / 2
     target_dist = torch.norm(cmd_accum, dim=1) * (resampling_time * (1 - zero_prob))

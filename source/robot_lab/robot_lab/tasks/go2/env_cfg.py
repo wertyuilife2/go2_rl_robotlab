@@ -138,47 +138,7 @@ class Go2SceneCfg(InteractiveSceneCfg):
 @configclass
 class CommandsCfg:
     """Command specifications for the MDP."""
-    base_velocity = mdp.UniformVelTerrainCmdCfg(
-        asset_name="robot",
-        resampling_time_range=(5.0, 5.0),
-        rel_standing_envs=0.1,
-        rel_heading_envs=1.0,
-        heading_command=False,
-        heading_control_stiffness=0.5,
-        debug_vis=True,
-        cycle_time=0.5,
-        use_phase_cmd=False,
-        ranges = mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 0.5), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-1.57, 1.57)
-        ),
-        terrain_max_ranges={
-            "pyramid_stairs": mdp.UniformVelocityCommandCfg.Ranges( 
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-1.57, 1.57)
-        ),
-            "pyramid_stairs_inv": mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-1.57, 1.57)
-        ),
-            "box": mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.5, 1.5), heading=(-1.57, 1.57)
-        ),
-            "random_rough": mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.5, 1.5), heading=(-1.57, 1.57)
-        ),
-            "flat": mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-2.0, 2.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-2.0, 2.0), heading=(-1.57, 1.57)
-        ),
-            "hf_pyramid_slope": mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.5, 1.5), heading=(-1.57, 1.57)
-        ),
-            "hf_pyramid_slope_inv": mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.5, 1.5), heading=(-1.57, 1.57)
-        ),
-            },
-        curriculum_schedule=[
-        {'iter': 50000, 'lin_vel_x': [-2.0, 2.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-2.0, 2.0], 'heading': [-1.57, 1.57]},
-        {'iter': 20000, 'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5], 'heading': [-1.57, 1.57]},
-        ], # 根据iter倒序排布
-    )
+    base_velocity = mdp.Go2RLGymCommandCfg()
 
 @configclass
 class ActionsCfg:
@@ -528,12 +488,12 @@ class CurriculumCfg:
     base_height_l2 = CurrTerm(mdp.gradual_reward_weight_modification, params={
         "term_name": "base_height_l2", "initial_weight": -1.0, "final_weight": -10.0, "start_it": 0, "end_it": 5000
         })
-    ref_stand_envs = CurrTerm(mdp.gradual_ref_stand_modification, params={
-        "term_name": "base_velocity", "initial": 0.0, "final": 0.1, "start_it": 0, "end_it": 1500
-        })
-    command_curr = CurrTerm(mdp.command_curriculum, params={
-        "command_term_name": "base_velocity", "num_steps_per_iter": 24, 
-        })
+    # ref_stand_envs = CurrTerm(mdp.gradual_ref_stand_modification, params={
+    #     "term_name": "base_velocity", "initial": 0.0, "final": 0.1, "start_it": 0, "end_it": 1500
+    #     })
+    # command_curr = CurrTerm(mdp.command_curriculum, params={
+    #     "command_term_name": "base_velocity", "num_steps_per_iter": 24, 
+    #     })
  
 
 ##
