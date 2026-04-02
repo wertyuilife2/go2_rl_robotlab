@@ -60,13 +60,10 @@ Run the following commands:
 
 ```bash
 # Train
-python scripts/rsl_rl/train.py \
-    --task=RobotLab-Go2-v0 \
-    --headless
+python scripts/rsl_rl/train.py --task=RobotLab-Go2-v0 --headless
 
-# Play / Evaluate
-python scripts/rsl_rl/play.py \
-    --task=RobotLab-Go2-v0
+# Evaluate
+python scripts/rsl_rl/play.py --task=RobotLab-Go2-v0
 ```
 
 ---
@@ -99,10 +96,13 @@ The default task settings are defined in the following files:
 In addition to the default configuration files, `train.py` and `play.py` supports several command-line arguments for runtime overrides:
 
 ```bash
---experiment_name <YOUR_EXP_NAME>
---run_name <YOUR_RUN_NAME>
---num_envs <NUM_ENVS>
---checkpoint <PATH_TO_CHECKPOINT>
+python scripts/rsl_rl/train.py \
+   --task=RobotLab-Go2-v0 \
+   --headless \
+   --experiment_name <YOUR_EXP_NAME> \
+   --run_name <YOUR_RUN_NAME> \
+   --num_envs <NUM_ENVS> \
+   --checkpoint <PATH_TO_CHECKPOINT>
 ```
 
 For more details, refer to the [robot_lab repo](https://github.com/fan-ziqi/robot_lab.git).
