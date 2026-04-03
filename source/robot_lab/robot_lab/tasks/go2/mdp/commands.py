@@ -24,7 +24,7 @@ from isaaclab.markers import VisualizationMarkers
 from .utils import is_robot_on_terrain
 
 if TYPE_CHECKING:
-    from isaaclab.envs import ManagerBasedEnv
+    from robot_lab.tasks.go2.env.go2_env import ManagerBasedRLEnv
 
 
 class UniformVelTerrainCmd(CommandTerm):

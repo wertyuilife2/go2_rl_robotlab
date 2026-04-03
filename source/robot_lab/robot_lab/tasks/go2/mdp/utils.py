@@ -70,10 +70,11 @@ def is_env_assigned_to_terrain(env: ManagerBasedEnv, terrain_name: str) -> torch
 
 
 def is_robot_on_terrain(env: ManagerBasedEnv, terrain_name: str, asset_name: str = "robot") -> torch.Tensor:
-    """Check which robots are currently standing on the specified terrain type.
+    """Check which environments are currently assigned to the specified terrain type.
 
-    This function calculates which terrain grid cell each robot is on based on its world position,
-    then checks if that cell's terrain type matches the specified terrain.
+    The terrain importer tracks the active terrain column for every environment.
+    This helper uses that assignment directly instead of inferring terrain membership
+    from robot world positions.
 
     Args:
         env: The environment instance.
@@ -97,30 +98,32 @@ def is_robot_on_terrain(env: ManagerBasedEnv, terrain_name: str, asset_name: str
 
     col_start, col_end = col_range
 
-    # Get robot positions in world frame
-    asset = env.scene[asset_name]
-    robot_pos_w = asset.data.root_pos_w[:, :2]  # [num_envs, 2] (x, y)
+    # The terrain importer already tracks the active terrain column for each environment.
+    # Using that source of truth keeps this aligned with curriculum updates and avoids
+    # misclassifying robots by searching the nearest tile in world coordinates.
+    del asset_name
+    return (terrain.terrain_types >= col_start) & (terrain.terrain_types < col_end)
 
-    # Get terrain grid information
-    terrain_origins = terrain.terrain_origins  # [num_rows, num_cols, 3]
-    num_rows, num_cols, _ = terrain_origins.shape
 
-    # Use terrain_origins to directly compute which cell each robot is in
-    # terrain_origins[r, c, :2] is the center of cell (r, c)
-    # We need to find the closest terrain origin for each robot
+"""Commands Utilities"""
 
-    # Reshape terrain_origins for distance calculation
-    terrain_origins_2d = terrain_origins[:, :, :2].reshape(num_rows * num_cols, 2)  # [num_rows*num_cols, 2]
+def sample_disjoint_intervals(env_ids, limit_bound, cfg_min, cfg_max, device):
+    """Sample uniform distribution from [cfg_min, -limit_bound] U [limit_bound, cfg_max]"""
+    width_neg = torch.nn.functional.relu(-limit_bound - cfg_min)
+    width_pos = torch.nn.functional.relu(cfg_max - limit_bound)
+    
+    total_width = width_neg + width_pos + 1e-6 # 加极小值防除零
+    u = torch.rand(len(env_ids), device=device) * total_width
+    
+    samples = torch.where(
+        u < width_neg, 
+        cfg_min + u, 
+        cfg_max - width_pos + (u - width_neg)
+    )
+    return samples
 
-    # Calculate distances from each robot to all terrain origins
-    distances = torch.cdist(robot_pos_w, terrain_origins_2d)  # [num_envs, num_rows*num_cols]
-
-    # Find the closest terrain origin for each robot
-    closest_flat_idx = torch.argmin(distances, dim=1)  # [num_envs]
-
-    # Convert flat index to column index
-    # flat_idx = row * num_cols + col
-    col_idx = closest_flat_idx % num_cols  # [num_envs]
-
-    # Check if the robot's current terrain column is in the specified terrain's range
-    return (col_idx >= col_start) & (col_idx < col_end)
+def sample_single_interval(env_ids, cfg_min, cfg_max, device):
+    """Sample uniform distribution from [cfg_min, cfg_max]"""
+    r = torch.rand(len(env_ids), device=device)
+    samples = cfg_min + r * (cfg_max - cfg_min)
+    return samples
