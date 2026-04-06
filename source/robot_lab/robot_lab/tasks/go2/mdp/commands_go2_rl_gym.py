@@ -262,10 +262,10 @@ class Go2RLGymCommand(CommandTerm):
     def _update_env_command_ranges(self):
         """ Update environment-wise command ranges based on current command ranges and terrain type """
         for terrain_type, terrain_command_ranges in self.cfg.terrain_max_command_ranges.items():
+            if terrain_type not in self.terrain_type2idx:
+                continue
             terrain_idx = self.terrain_type2idx[terrain_type]
             env_ids = (self.terrain_idxs == terrain_idx).nonzero().flatten()
-            if len(env_ids) == 0:
-                continue
             self.env_command_ranges['lin_vel_x'][env_ids, 0] = max(
                 terrain_command_ranges['lin_vel_x'][0],
                 self.command_ranges['lin_vel_x'][0],
