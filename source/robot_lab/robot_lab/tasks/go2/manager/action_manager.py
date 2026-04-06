@@ -9,7 +9,10 @@ class ActionManagerWithDelay(ActionManager):
     
     def reset(self, env_ids: Sequence[int] | None = None) -> dict[str, torch.Tensor]:
         super().reset(env_ids)
-        self._prev_prev_action.zero_()
+        if env_ids is None:
+            self._prev_prev_action.zero_()
+        else:
+            self._prev_prev_action[env_ids] = 0.0
         return {}
     
     def process_action(self, action: torch.Tensor):

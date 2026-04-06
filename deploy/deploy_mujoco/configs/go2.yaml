@@ -1,5 +1,10 @@
-policy_path: "{ROOT_DIR}/deploy/pretrain/go2/go2_moe_cts_1500.pt"
-xml_path: "{ROOT_DIR}/resources/go2/stairs.xml"
+policy_path: "{ROOT_DIR}/deploy/pre_train/wyh/go2_moe_cts_v1_49500.pt"
+
+xml_path: "{ROOT_DIR}/resource/stairs.xml"
+
+render_fps: 240
+video_fps: 60
+save_video: false
 
 # Total simulation time
 simulation_duration: 60000000.0
@@ -10,7 +15,7 @@ control_decimation: 10
 base_init_pos: [0.0, 0.0, 0.57]
 base_init_quat: [1.0, 0.0, 0.0, 0.0]
 
-# For IsaacLab DelayedPDActuatorCfg, if not used, set all delay to 0.
+# Based on the implementation of IsaacLab's DelayedPDActuatorCfg.
 actuator_delay_min: 0
 actuator_delay_max: 0
 actuator_delay_seed: 0

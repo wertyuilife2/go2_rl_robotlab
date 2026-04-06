@@ -431,8 +431,8 @@ class RewardsCfg:
         weight=-1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_thigh|.*_calf"), "threshold": 5.0},
     )
-    hip_pos_penalty = RewTerm(
-        func=mdp.hip_pos_penalty,
+    hip_pos_penalty_l1 = RewTerm(
+        func=mdp.hip_pos_penalty_l1,
         weight=-0.05,
         params={
             "command_name": "base_velocity",

@@ -4,7 +4,7 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 150000
+    max_iterations = 300000
     save_interval = 500
     experiment_name = "go2_rough" 
     
@@ -73,7 +73,7 @@ class MoECTSRunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "go2_moe_cts"
     class_name = "OnPolicyRunnerCTS"
     num_steps_per_env = 24
-    max_iterations = 150000
+    max_iterations = 300000
     save_interval = 500
     policy = RslRlMoeCtsActorCriticCfg()
     algorithm = RslRlMoeCtsAlgorithmCfg()
