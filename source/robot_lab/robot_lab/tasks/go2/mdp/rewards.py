@@ -566,44 +566,37 @@ def feet_regulation(
     asset: RigidObject = env.scene[asset_cfg.name]
     feet_ids = asset_cfg.body_ids
 
-    feet_pos_w = asset.data.body_link_pos_w[:, feet_ids, :]
-    base_pos_w = asset.data.root_link_pos_w.unsqueeze(1)
+    feet_pos_w = asset.data.body_pos_w[:, feet_ids, :]
+    base_pos_w = asset.data.root_pos_w.unsqueeze(1)
     feet_xy_vel_w = asset.data.body_lin_vel_w[:, feet_ids, :2]
-
-    base_z = asset.data.root_link_pos_w[:, 2]
+    base_z = asset.data.root_pos_w[:, 2]
 
     if sensor_cfg is not None:
+        # estimate ground_z from rays
         sensor: RayCaster = env.scene[sensor_cfg.name]
         ray_hits_z = sensor.data.ray_hits_w[..., 2]
-
         invalid = (
             torch.isnan(ray_hits_z).any(dim=1)
             | torch.isinf(ray_hits_z).any(dim=1)
             | (torch.max(torch.abs(ray_hits_z), dim=1).values > 1e6)
         )
-
         estimated_ground_z = torch.mean(ray_hits_z, dim=1)
         fallback_ground_z = base_z - base_height_target
-        estimated_ground_z = torch.where(invalid, fallback_ground_z, estimated_ground_z)
+        estimated_ground_z = torch.where(invalid, fallback_ground_z, estimated_ground_z)        
     else:
         estimated_ground_z = base_z - base_height_target
 
     base_height = base_z - estimated_ground_z
 
     gravity_w = torch.tensor(env.sim.cfg.gravity, device=env.device, dtype=feet_pos_w.dtype)
-    up_w = -gravity_w / torch.norm(gravity_w)
-
+    down_w = gravity_w / torch.norm(gravity_w)
+    
+    # compute feet regulation reward from world inputs
     delta_feet_w = feet_pos_w - base_pos_w
-    feet2base_height = torch.sum(delta_feet_w * up_w.view(1, 1, 3), dim=-1)
-
+    feet2base_height = torch.sum(delta_feet_w * down_w.view(1, 1, 3), dim=-1)
     feet_height = torch.clamp(base_height.unsqueeze(1) - feet2base_height, min=0.0)
 
-    reward = (
-        feet_xy_vel_w.pow(2).sum(dim=-1)
-        * torch.exp(-feet_height / (0.025 * base_height_target))
-    ).sum(dim=-1)
-
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    reward = (feet_xy_vel_w.pow(2).sum(dim=-1) * torch.exp(-feet_height / (0.025 * base_height_target))).sum(dim=-1)
 
     return reward
 

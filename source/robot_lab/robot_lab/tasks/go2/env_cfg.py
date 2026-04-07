@@ -115,7 +115,14 @@ class Go2SceneCfg(InteractiveSceneCfg):
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
-
+    height_scanner_small = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[0.4, 0.2]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+    )
     contact_forces = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*", 
         history_length=3, 
@@ -406,9 +413,20 @@ class RewardsCfg:
     )
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-    flat_orientation_l2 = RewTerm(
-        func=mdp.flat_orientation_l2, 
-        weight=-3.0
+    dof_acc_l2 = RewTerm(
+        func=mdp.joint_acc_l2, 
+        weight=-2.5e-7,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
+    )
+    joint_power = RewTerm(
+        func=mdp.joint_power,
+        weight=-2e-5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
+    )
+    joint_torques_l2 = RewTerm(
+        func=mdp.joint_torques_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
     )
     base_height_l2 = RewTerm(
         func=mdp.base_height_l2,
@@ -419,17 +437,26 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("height_scanner"),
         }
     )
-    dof_acc_l2 = RewTerm(
-        func=mdp.joint_acc_l2, 
-        weight=-2.0e-7,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
-    )
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     action_smoothness_l2 = RewTerm(func=mdp.action_smoothness_l2, weight=-0.01)
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
         weight=-1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_thigh|.*_calf"), "threshold": 5.0},
+    )
+    dof_pos_limits = RewTerm(
+        func=mdp.dof_pos_limits,
+        weight=-2.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    feet_regulation = RewTerm(
+        func=mdp.feet_regulation,
+        weight=-0.05,
+        params={
+            "base_height_target": 0.38,
+            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAME),
+            "sensor_cfg": SceneEntityCfg("height_scanner_small"),
+        },
     )
     hip_pos_penalty_l1 = RewTerm(
         func=mdp.hip_pos_penalty_l1,
@@ -440,30 +467,6 @@ class RewardsCfg:
             "stand_still_scale": 1.0,
             "command_threshold": 0.1,
         },
-    )
-    joint_torques_l2 = RewTerm(
-        func=mdp.joint_torques_l2,
-        weight=-1e-4,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
-    )
-    joint_power = RewTerm(
-        func=mdp.joint_power,
-        weight=-2e-5,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
-    )
-    feet_regulation = RewTerm(
-        func=mdp.feet_regulation,
-        weight=-0.05,
-        params={
-            "base_height_target": 0.38,
-            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAME),
-            "sensor_cfg": SceneEntityCfg("height_scanner"),
-        },
-    )
-    dof_pos_limits = RewTerm(
-        func=mdp.dof_pos_limits,
-        weight=-2.0,
-        params={"asset_cfg": SceneEntityCfg("robot")},
     )
     
 @configclass
@@ -534,6 +537,8 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
         # Update sensor periods
         if self.scene.height_scanner is not None:
             self.scene.height_scanner.update_period = self.decimation * self.sim.dt
+        if getattr(self.scene, "height_scanner_small", None) is not None:
+            self.scene.height_scanner_small.update_period = self.decimation * self.sim.dt
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
 
