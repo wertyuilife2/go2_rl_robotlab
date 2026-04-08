@@ -18,7 +18,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 import isaaclab.terrains as terrain_gen
 
 import robot_lab.tasks.go2.mdp as mdp
-from robot_lab.assets.unitree import UNITREE_GO2_CFG
+from robot_lab.assets.unitree import GO2_CFG_ROBOTLAB, GO2_CFG_UNITREE
 
 JOINT_NAMES = [
     "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
@@ -105,7 +105,7 @@ class Go2SceneCfg(InteractiveSceneCfg):
         debug_vis=False
     )
 
-    robot: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = GO2_CFG_ROBOTLAB.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base",
@@ -331,7 +331,7 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.8, 1.2),
+            "position_range": (0.5, 1.5),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -387,15 +387,7 @@ class EventCfg:
             },
         },
     )
-    randomize_apply_external_force_torque = EventTerm(
-        func=mdp.apply_external_force_torque,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "force_range": (-5.0, 5.0),
-            "torque_range": (-5.0, 5.0),
-        },
-    )
+
         
 @configclass
 class RewardsCfg:

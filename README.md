@@ -168,7 +168,7 @@ xml_path: "{ROOT_DIR}/resources/go2/your-custom-scene.xml"
 
 ## TODO
 
-- Try replacing ActionManager-level delay with `DelayedPDActuatorCfg`
+- Try replacing ActionManager-level delay with `DelayedPDActuatorCfg` or `UnitreeActuatorCfg_Go2HV`, and make sure the randomization of motor parameters  works correctly.
 
 ---
 
