@@ -19,7 +19,7 @@ from isaaclab_tasks.utils import import_packages
 ##
 gym.register(
     id="RobotLab-Go2-v0",
-    # entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    # entry_point="robot_lab.tasks.go2.env.go2_env:Go2Env",
     entry_point="robot_lab.tasks.go2.env.go2_env:ActionDelayGo2Env",
     disable_env_checker=True,
     kwargs={
