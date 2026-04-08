@@ -111,6 +111,12 @@ For more details, refer to the [robot_lab repo](https://github.com/fan-ziqi/robo
 
 ## MuJoCo Sim2Sim
 
+Set the `policy_path` in `deploy/deploy_mujoco/configs/go2.yaml`:
+
+```yaml
+policy_path: "{ROOT_DIR}/deploy/pre_train/go2/xxx.pt" # policy.pt exported by running scripts/rsl_rl/play.py
+```
+
 Run the deployment script:
 
 ```bash
@@ -133,11 +139,7 @@ python deploy/deploy_mujoco/deploy_go2.py
 
 ### Switching Simulation Scenarios
 
-Modify `xml_path` in:
-
-```
-deploy/deploy_mujoco/config/go2.yaml
-```
+Modify `xml_path` in `deploy/deploy_mujoco/config/go2.yaml`:
 
 ```yaml
 # Flat terrain
