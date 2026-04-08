@@ -267,3 +267,40 @@ def reset_root_state_uniform(
         # set into the physics simulation
         asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=non_pit_env_ids)
         asset.write_root_velocity_to_sim(velocities, env_ids=non_pit_env_ids)
+
+def randomize_action_joint_pos_offset(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    action_term_name: str,
+    offset_range: tuple[float, float],
+):
+    """Randomize the motor zero-offset on a joint-position action term."""
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device=env.device)
+    elif not isinstance(env_ids, torch.Tensor):
+        env_ids = torch.as_tensor(env_ids, dtype=torch.long, device=env.device)
+    else:
+        env_ids = env_ids.to(device=env.device, dtype=torch.long)
+    if len(env_ids) == 0:
+        return
+
+    action_term = env.action_manager.get_term(action_term_name)
+    if not hasattr(action_term, "_offset") or not isinstance(action_term._offset, torch.Tensor):
+        raise TypeError(
+            f"Action term '{action_term_name}' does not expose a tensor '_offset', "
+            "so it cannot be used for motor zero-offset randomization."
+        )
+
+    cache_name = f"_default_action_offset_{action_term_name}"
+    default_offset = getattr(env, cache_name, None)
+    if default_offset is None or default_offset.shape != action_term._offset.shape:
+        default_offset = action_term._offset.clone()
+        setattr(env, cache_name, default_offset)
+
+    offset_noise = math_utils.sample_uniform(
+        offset_range[0],
+        offset_range[1],
+        (len(env_ids), action_term._offset.shape[1]),
+        device=env.device,
+    )
+    action_term._offset[env_ids] = default_offset[env_ids] + offset_noise
