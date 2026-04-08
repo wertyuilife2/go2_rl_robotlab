@@ -119,7 +119,7 @@ class Go2SceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[0.4, 0.2]),
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[0.4, 0.3]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
