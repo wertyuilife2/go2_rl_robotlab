@@ -18,6 +18,43 @@ from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
+def _get_base_height(
+    env: ManagerBasedRLEnv,
+    base_height_target: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Estimate base height above ground.
+
+    If a height scanner is provided, this returns:
+        base_height = base_z - estimated_ground_z
+
+    Otherwise, it falls back to the world-frame root height, which matches the flat-ground
+    interpretation used by Gym-style rewards.
+
+    Invalid ray scans preserve the previous behavior by falling back to
+    ``estimated_ground_z = base_z - base_height_target``, which makes
+    ``base_height == base_height_target`` for those environments.
+    """
+    asset: RigidObject = env.scene[asset_cfg.name]
+    base_z = asset.data.root_pos_w[:, 2]
+
+    if sensor_cfg is None:
+        return base_z
+
+    sensor: RayCaster = env.scene[sensor_cfg.name]
+    ray_hits_z = sensor.data.ray_hits_w[..., 2]
+    invalid = (
+        torch.isnan(ray_hits_z).any(dim=1)
+        | torch.isinf(ray_hits_z).any(dim=1)
+        | (torch.max(torch.abs(ray_hits_z), dim=1).values > 1e6)
+    )
+
+    estimated_ground_z = torch.mean(ray_hits_z, dim=1)
+    fallback_ground_z = base_z - base_height_target
+    estimated_ground_z = torch.where(invalid, fallback_ground_z, estimated_ground_z)
+    return base_z - estimated_ground_z
+
 
 def track_lin_vel_xy_exp(
     env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
@@ -31,7 +68,6 @@ def track_lin_vel_xy_exp(
         dim=1,
     )
     reward = torch.exp(-lin_vel_error / std**2)
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
 
@@ -44,7 +80,6 @@ def track_ang_vel_z_exp(
     # compute the error
     ang_vel_error = torch.square(env.command_manager.get_command(command_name)[:, 2] - asset.data.root_ang_vel_b[:, 2])
     reward = torch.exp(-ang_vel_error / std**2)
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
 
@@ -472,22 +507,8 @@ def base_height_l2(
         For flat terrain, target height is in the world frame. For rough terrain,
         sensor readings can adjust the target height to account for the terrain.
     """
-    # extract the used quantities (to enable type-hinting)
-    asset: RigidObject = env.scene[asset_cfg.name]
-    if sensor_cfg is not None:
-        sensor: RayCaster = env.scene[sensor_cfg.name]
-        # Adjust the target height using the sensor data
-        ray_hits = sensor.data.ray_hits_w[..., 2]
-        if torch.isnan(ray_hits).any() or torch.isinf(ray_hits).any() or torch.max(torch.abs(ray_hits)) > 1e6:
-            adjusted_target_height = asset.data.root_link_pos_w[:, 2]
-        else:
-            adjusted_target_height = target_height + torch.mean(ray_hits, dim=1)
-    else:
-        # Use the provided target height directly for flat terrain
-        adjusted_target_height = target_height
-    # Compute the L2 squared penalty
-    reward = torch.square(asset.data.root_pos_w[:, 2] - adjusted_target_height)
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    base_height = _get_base_height(env, target_height, asset_cfg, sensor_cfg)
+    reward = torch.square(base_height - target_height)
     return reward
 
 
@@ -496,7 +517,6 @@ def lin_vel_z_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntity
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
     reward = torch.square(asset.data.root_lin_vel_b[:, 2])
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
 
@@ -505,7 +525,6 @@ def ang_vel_xy_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntit
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
     reward = torch.sum(torch.square(asset.data.root_ang_vel_b[:, :2]), dim=1)
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
 
@@ -518,7 +537,6 @@ def undesired_contacts(env: ManagerBasedRLEnv, threshold: float, sensor_cfg: Sce
     is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold
     # sum over contacts for each environment
     reward = torch.sum(is_contact, dim=1).float()
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
 
@@ -530,7 +548,6 @@ def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scen
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
     reward = torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
-    # reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
 
@@ -562,6 +579,14 @@ def feet_regulation(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     sensor_cfg: SceneEntityCfg | None = None,
 ) -> torch.Tensor:
+    """Penalize fast horizontal foot motion near the ground.
+    
+    Feet that are close to the ground receive a much larger penalty for lateral motion, 
+    while feet that are lifted during swing are penalized much less. 
+    
+    Physically, this discourages foot scuffing / dragging, and encourages 
+    the robot to lift its feet before moving them quickly in the xy plane.
+    """
 
     asset: RigidObject = env.scene[asset_cfg.name]
     feet_ids = asset_cfg.body_ids
@@ -569,29 +594,11 @@ def feet_regulation(
     feet_pos_w = asset.data.body_pos_w[:, feet_ids, :]
     base_pos_w = asset.data.root_pos_w.unsqueeze(1)
     feet_xy_vel_w = asset.data.body_lin_vel_w[:, feet_ids, :2]
-    base_z = asset.data.root_pos_w[:, 2]
-
-    if sensor_cfg is not None:
-        # estimate ground_z from rays
-        sensor: RayCaster = env.scene[sensor_cfg.name]
-        ray_hits_z = sensor.data.ray_hits_w[..., 2]
-        invalid = (
-            torch.isnan(ray_hits_z).any(dim=1)
-            | torch.isinf(ray_hits_z).any(dim=1)
-            | (torch.max(torch.abs(ray_hits_z), dim=1).values > 1e6)
-        )
-        estimated_ground_z = torch.mean(ray_hits_z, dim=1)
-        fallback_ground_z = base_z - base_height_target
-        estimated_ground_z = torch.where(invalid, fallback_ground_z, estimated_ground_z)        
-    else:
-        estimated_ground_z = base_z - base_height_target
-
-    base_height = base_z - estimated_ground_z
+    base_height = _get_base_height(env, base_height_target, asset_cfg, sensor_cfg)
 
     gravity_w = torch.tensor(env.sim.cfg.gravity, device=env.device, dtype=feet_pos_w.dtype)
     down_w = gravity_w / torch.norm(gravity_w)
     
-    # compute feet regulation reward from world inputs
     delta_feet_w = feet_pos_w - base_pos_w
     feet2base_height = torch.sum(delta_feet_w * down_w.view(1, 1, 3), dim=-1)
     feet_height = torch.clamp(base_height.unsqueeze(1) - feet2base_height, min=0.0)

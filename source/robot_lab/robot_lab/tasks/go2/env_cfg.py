@@ -434,7 +434,7 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
             "target_height": 0.38,
-            "sensor_cfg": SceneEntityCfg("height_scanner"),
+            "sensor_cfg": SceneEntityCfg("height_scanner_small"),
         }
     )
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
@@ -537,7 +537,7 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
         # Update sensor periods
         if self.scene.height_scanner is not None:
             self.scene.height_scanner.update_period = self.decimation * self.sim.dt
-        if getattr(self.scene, "height_scanner_small", None) is not None:
+        if self.scene.height_scanner_small is not None:
             self.scene.height_scanner_small.update_period = self.decimation * self.sim.dt
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
