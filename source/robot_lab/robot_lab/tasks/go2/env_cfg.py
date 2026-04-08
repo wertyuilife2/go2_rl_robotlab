@@ -346,6 +346,14 @@ class EventCfg:
             "distribution": "uniform",
         },
     )
+    randomize_motor_zero_offset = EventTerm(
+        func=mdp.randomize_action_joint_pos_offset,
+        mode="reset",
+        params={
+            "action_term_name": "joint_pos",
+            "offset_range": (-0.035, 0.035),
+        },
+    )
     randomize_push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
