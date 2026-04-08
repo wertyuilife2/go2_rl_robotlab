@@ -29,7 +29,7 @@ JOINT_NAMES = [
 
 BASE_LINK_NAME = "base"
 FOOT_LINK_NAME = ".*_foot"
-
+BASE_HEIGHT_TARGET = 0.38 # base height target for rewards, set as an attribute of the env config.
 
 ##
 # Terrain definition
@@ -433,7 +433,7 @@ class RewardsCfg:
         weight=-1.0, 
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "target_height": 0.38,
+            "target_height": BASE_HEIGHT_TARGET,
             "sensor_cfg": SceneEntityCfg("height_scanner_small"),
         }
     )
@@ -453,7 +453,7 @@ class RewardsCfg:
         func=mdp.feet_regulation,
         weight=-0.05,
         params={
-            "base_height_target": 0.38,
+            "base_height_target": BASE_HEIGHT_TARGET,
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAME),
             "sensor_cfg": SceneEntityCfg("height_scanner_small"),
         },
@@ -491,13 +491,6 @@ class CurriculumCfg:
     base_height_l2 = CurrTerm(mdp.gradual_reward_weight_modification, params={
         "term_name": "base_height_l2", "initial_weight": -1.0, "final_weight": -10.0, "start_it": 0, "end_it": 5000
         })
-    # ref_stand_envs = CurrTerm(mdp.gradual_ref_stand_modification, params={
-    #     "term_name": "base_velocity", "initial": 0.0, "final": 0.1, "start_it": 0, "end_it": 1500
-    #     })
-    # command_curr = CurrTerm(mdp.command_curriculum, params={
-    #     "command_term_name": "base_velocity", "num_steps_per_iter": 24, 
-    #     })
- 
 
 ##
 # Environment configuration
