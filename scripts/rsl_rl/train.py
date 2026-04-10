@@ -14,8 +14,9 @@ import argparse
 import os
 import sys
 
-# Preload tensordict's native extension before isaacsim/Kit modules are imported
-# to avoid a Windows access violation when RSL-RL imports it later.
+# Preload native extensions before isaacsim/Kit modules are imported to avoid
+# Windows DLL loader conflicts when Isaac Lab/RSL-RL import them later.
+import h5py  # noqa: F401
 import tensordict  # noqa: F401
 
 from isaaclab.app import AppLauncher
