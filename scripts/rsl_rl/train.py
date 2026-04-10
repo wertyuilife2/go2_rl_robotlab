@@ -14,6 +14,10 @@ import argparse
 import os
 import sys
 
+# Preload tensordict's native extension before isaacsim/Kit modules are imported
+# to avoid a Windows access violation when RSL-RL imports it later.
+import tensordict  # noqa: F401
+
 from isaaclab.app import AppLauncher
 
 # local imports
