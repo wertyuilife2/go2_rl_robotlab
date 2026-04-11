@@ -373,23 +373,42 @@ class Go2RLGymCommandCfg(CommandTermCfg):
         'ang_vel_yaw': [-2.0, 2.0], # min max [rad/s]
     }]
     """List for command range curriculums at specific training iterations"""
+    # terrain_max_command_ranges: dict[str, dict] = {
+    #     'random_rough':
+    #         {'lin_vel_x': [-1.5, 1.5], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+    #     'hf_pyramid_slope':
+    #         {'lin_vel_x': [-1.5, 1.5], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+    #     'hf_pyramid_slope_inv':
+    #         {'lin_vel_x': [-1.5, 1.5], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+    #     'pyramid_stairs':
+    #         {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+    #     'pyramid_stairs_inv':
+    #         {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+    #     'boxes':
+    #         {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+    #     'flat':
+    #         {'lin_vel_x': [-2.0, 2.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-2.0, 2.0]},
+    # }
     terrain_max_command_ranges: dict[str, dict] = {
-        'random_rough':
+        'wave':
             {'lin_vel_x': [-1.5, 1.5], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
-        'hf_pyramid_slope':
+        'slope':
             {'lin_vel_x': [-1.5, 1.5], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
-        'hf_pyramid_slope_inv':
+        'rough_slope':
             {'lin_vel_x': [-1.5, 1.5], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
-        'pyramid_stairs':
+        'stairs_up':
             {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
-        'pyramid_stairs_inv':
+        'stairs_down':
             {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
-        'boxes':
+        'obstacles':
             {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+        # 'stepping_stones':
+        #     {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
+        # 'gap':
+        #     {'lin_vel_x': [-1.0, 1.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-1.5, 1.5]},
         'flat':
             {'lin_vel_x': [-2.0, 2.0], 'lin_vel_y': [-1.0, 1.0], 'ang_vel_yaw': [-2.0, 2.0]},
     }
-
     resampling_time: float = 5.0
     resampling_time_range: tuple[float, float] = (5.0, 5.0)
     """Time before command are changed [s]"""
