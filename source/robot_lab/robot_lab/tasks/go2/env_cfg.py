@@ -15,10 +15,10 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-import isaaclab.terrains as terrain_gen
 
 import robot_lab.tasks.go2.mdp as mdp
 from robot_lab.assets.unitree import GO2_CFG_ROBOTLAB, GO2_CFG_UNITREE
+from robot_lab.tasks.go2.mdp.terrain import DEFAULT_TERRAIN_CFG
 
 JOINT_NAMES = [
     "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
@@ -35,47 +35,7 @@ BASE_HEIGHT_TARGET = 0.38 # base height target for rewards, set as an attribute 
 # Terrain definition
 ##
 
-TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
-    size=(8.0, 8.0),
-    border_width=25.0,
-    num_rows=10,
-    num_cols=20,
-    horizontal_scale=0.1,
-    vertical_scale=0.005,
-    slope_threshold=0.75,
-    use_cache=False,
-    sub_terrains={
-        "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.15,
-            step_height_range=(0.05, 0.25),
-            step_width=0.3,
-            platform_width=3.0,
-            border_width=1.0,
-            holes=False,
-        ),
-        "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.20,
-            step_height_range=(0.05, 0.25),
-            step_width=0.3,
-            platform_width=3.0,
-            border_width=1.0,
-            holes=False,
-        ),
-        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
-            proportion=0.15, grid_width=0.45, grid_height_range=(0.025, 0.1), platform_width=2.0
-        ),
-        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.15, noise_range=(0.01, 0.06), noise_step=0.01, border_width=0.25
-        ),
-        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.15),
-        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.5), platform_width=2.0, border_width=0.25
-        ),
-        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.5), platform_width=2.0, border_width=0.25
-        ),
-    },
-)
+TERRAIN_CFG = DEFAULT_TERRAIN_CFG
 
 
 ##
@@ -517,8 +477,8 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
         
         # Physics material settings from subclass
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
-        self.sim.physx.gpu_collision_stack_size = int(64 * 1024 * 1024)  # 128 MB
+        self.sim.physx.gpu_max_rigid_patch_count = 512 * 1024
+        self.sim.physx.gpu_collision_stack_size = int(128 * 1024 * 1024)  # 128 MB
         self.sim.physx.enable_external_forces_every_iteration = True
 
         # Update sensor periods
