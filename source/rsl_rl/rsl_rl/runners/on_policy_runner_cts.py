@@ -9,6 +9,8 @@ import os
 import time
 import torch
 import warnings
+import yaml
+import numpy as np
 from tensordict import TensorDict
 
 from rsl_rl.algorithms import MoECTS
@@ -21,6 +23,21 @@ from rsl_rl.modules import (
 from rsl_rl.storage import RolloutStorageCTS
 from rsl_rl.utils import resolve_callable, resolve_obs_groups
 from rsl_rl.utils.logger_cts import LoggerCTS
+from rsl_rl.utils.exporter_cts import export_cts_policy_as_jit
+
+
+def numpy_representer(dumper: yaml.SafeDumper, data: np.floating) -> yaml.Node:
+    return dumper.represent_float(float(data))
+
+
+def numpy_int_representer(dumper: yaml.SafeDumper, data: np.integer) -> yaml.Node:
+    return dumper.represent_int(int(data))
+
+
+yaml.add_representer(np.float32, numpy_representer, Dumper=yaml.SafeDumper)
+yaml.add_representer(np.float64, numpy_representer, Dumper=yaml.SafeDumper)
+yaml.add_representer(np.int32, numpy_int_representer, Dumper=yaml.SafeDumper)
+yaml.add_representer(np.int64, numpy_int_representer, Dumper=yaml.SafeDumper)
 
 
 class OnPolicyRunnerCTS:
@@ -57,6 +74,18 @@ class OnPolicyRunnerCTS:
         )
 
         self.current_learning_iteration = 0
+
+        # robogauge client
+        try:
+            robogauge_cfg = train_cfg.get("robogauge", {})
+            if not robogauge_cfg.get("enabled", False):
+                raise ImportError("config disabled")
+            from robogauge.scripts.client import RoboGaugeClient
+
+            self.robogauge_client = RoboGaugeClient(f"http://127.0.0.1:{robogauge_cfg.get('port', 9973)}")
+        except Exception as e:
+            print(f"[INFO] RoboGauge client could not be initialized: {e}, disabling RoboGauge interface.")
+            self.robogauge_client = None
 
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None:
         # Randomize initial episode lengths (for exploration)
@@ -124,13 +153,17 @@ class OnPolicyRunnerCTS:
 
             # Save model
             if it % self.cfg["save_interval"] == 0:
-                self.save(os.path.join(self.logger.log_dir, f"model_{it}.pt"))  # type: ignore
+                self.save(os.path.join(self.logger.log_dir, f"model_{it}.pt"), it=it, last_model=False)  # type: ignore
 
         # Save the final model after training
         if self.logger.log_dir is not None and not self.logger.disable_logs:
-            self.save(os.path.join(self.logger.log_dir, f"model_{self.current_learning_iteration}.pt"))
+            self.save(
+                os.path.join(self.logger.log_dir, f"model_{self.current_learning_iteration}.pt"),
+                it=self.current_learning_iteration,
+                last_model=True,
+            )
 
-    def save(self, path: str, infos: dict | None = None) -> None:
+    def save(self, path: str, it: int, last_model: bool, infos: dict | None = None) -> None:
         # Save model
         saved_dict = {
             "model_state_dict": self.alg.policy.state_dict(),
@@ -148,6 +181,80 @@ class OnPolicyRunnerCTS:
 
         # Upload model to external logging services
         self.logger.save_model(path, self.current_learning_iteration)
+        self.update_robogauge(it, last_model)
+
+    def update_robogauge(self, it: int, last_model: bool) -> None:
+        if self.robogauge_client is None or self.logger.log_dir is None or self.logger.disable_logs:
+            return
+
+        try:
+            if it % 500 == 0 or last_model:
+                # export jit model
+                jit_dir = os.path.join(self.logger.log_dir, "jit_models")
+                jit_path = os.path.join(jit_dir, f"policy_jit_{it}.pt")
+                export_cts_policy_as_jit(
+                    self.alg.policy,
+                    actor_obs_normalizer=self.alg.policy.actor_obs_normalizer,
+                    single_obs_normalizer=self.alg.policy.single_obs_normalizer,
+                    path=jit_dir,
+                    filename=f"policy_jit_{it}.pt",
+                )
+                # upload to robogauge
+                self.robogauge_client.submit_task(
+                    model_path=jit_path,
+                    step=it,
+                    task_name="go2_lab",
+                    experiment_name=self.cfg["experiment_name"],
+                )
+        except Exception as e:
+            print(f"[WARN] RoboGauge submit failed at step {it}: {e}")
+            return
+
+        check_times = 1
+        if last_model:
+            check_times = int(1e9)  # keep checking until manually stopped
+
+        while check_times > 0:
+            check_times -= 1
+            try:
+                self.robogauge_client.monitor_tasks()
+            except Exception as e:
+                print(f"[WARN] RoboGauge monitor failed at step {it}: {e}")
+                break
+
+            results_dir = os.path.join(self.logger.log_dir, "robogauge_results")
+            os.makedirs(results_dir, exist_ok=True)
+            result_received = False
+
+            for task_id, resp in self.robogauge_client.response_data.items():
+                if not isinstance(resp, dict):
+                    print(f"[WARN] RoboGauge returned an invalid response for task {task_id}: {resp}")
+                    continue
+                results = resp.get("results")
+                step = resp.get("step", it)
+                if results is None:
+                    print(f"[WARN] RoboGauge returned empty results for task {task_id} at step {step}.")
+                    continue
+                scores = results.get("scores")
+                if scores is None:
+                    print(f"[WARN] RoboGauge results for task {task_id} at step {step} do not contain 'scores'.")
+                    continue
+                if step == it:
+                    result_received = True
+                if self.logger.writer is not None:
+                    for key, val in scores.items():
+                        self.logger.writer.add_scalar(f"RoboGauge/{key}", val, step)
+                results_path = os.path.join(results_dir, f"results_{step}.yaml")
+                with open(results_path, "w", encoding="utf-8") as f:
+                    yaml.dump(results, f, allow_unicode=True, sort_keys=False)
+
+            if last_model and result_received:
+                print(f"RoboGauge result for step {it} received. Exiting wait loop.")
+                break
+
+            if check_times > 0:
+                print("Sleeping for 1 minute before checking RoboGauge results again...")
+                time.sleep(60)  # wait for 1 minute before checking again
 
     def load(self, path: str, load_optimizer: bool = True, map_location: str | None = None) -> dict:
         loaded_dict = torch.load(path, weights_only=False, map_location=map_location)

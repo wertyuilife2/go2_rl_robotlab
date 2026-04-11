@@ -1,4 +1,16 @@
-"""Simplified CTS policy deployment for Unitree Go2 in MuJoCo."""
+"""Run CTS Go2 policy deployment in MuJoCo with joystick command input.
+
+Overview:
+This script loads a TorchScript policy, steps MuJoCo simulation with PD control, and
+queries the policy at control decimation using only current-frame observations. The
+exported policy manages internal observation history for CTS inference.
+
+Quick Start:
+    python deploy/deploy_mujoco/deploy_go2.py
+
+Notes:
+    This script currently uses CONFIG_NAME = "go2.yaml" and does not expose CLI flags.
+"""
 
 import time
 from pathlib import Path
@@ -12,13 +24,10 @@ from utils import (
     build_delay_buffers,
     display_current_command,
     gravity_from_quat,
-    infer_action,
     init_joystick,
-    latest_obs_frame,
     load_config,
     open_video_writer,
     pd_control,
-    push_obs_history,
     read_joystick_command,
     sample_delayed_targets,
     set_initial_state,
@@ -37,6 +46,17 @@ ACTUATOR_GROUPS = (
 
 
 def build_features(data, action: np.ndarray, cmd: np.ndarray, cfg):
+    """Build the current single-frame feature dictionary for policy inference.
+
+    Args:
+        data: MuJoCo runtime data object.
+        action: Latest action in MuJoCo joint order.
+        cmd: Current command vector.
+        cfg: Loaded deployment configuration.
+
+    Returns:
+        A feature dictionary keyed by observation group name.
+    """
     joint_pos = (data.qpos[7:] - cfg.default_angles) * cfg.dof_pos_scale
     joint_vel = data.qvel[6:] * cfg.dof_vel_scale
     return {
@@ -50,10 +70,33 @@ def build_features(data, action: np.ndarray, cmd: np.ndarray, cfg):
 
 
 def action_to_target(action: np.ndarray, cfg):
+    """Convert normalized action output to joint position targets.
+
+    Args:
+        action: Action in model joint order.
+        cfg: Loaded deployment configuration.
+
+    Returns:
+        Target joint positions in model joint order.
+    """
     return cfg.default_angles + action * cfg.action_pos_scale
 
 
+def build_single_obs(features: dict[str, np.ndarray], layout: list[tuple[str, int]]) -> np.ndarray:
+    """Flatten current feature groups into one single observation vector.
+
+    Args:
+        features: Current-step feature dictionary.
+        layout: Ordered feature layout specification.
+
+    Returns:
+        A concatenated single-frame observation vector.
+    """
+    return np.concatenate([features[name] for name, _ in layout], axis=0).astype(np.float32, copy=False)
+
+
 def main() -> None:
+    """Run MuJoCo simulation and deploy the CTS policy in closed-loop control."""
     cfg = load_config(CONFIG_NAME)
     layout = [
         ("ang_vel", 3),
@@ -82,7 +125,6 @@ def main() -> None:
     action = np.zeros(cfg.num_actions, dtype=np.float32)
     target_pos = cfg.default_angles.copy()
     target_vel = np.zeros(cfg.num_actions, dtype=np.float32)
-    obs = np.zeros(cfg.num_obs * cfg.history_len, dtype=np.float32)
     pos_history = build_delay_buffers(target_pos, delay_max=cfg.delay_max)
     delay_rng = np.random.default_rng(cfg.delay_seed)
     render_substeps = max(1, int((1.0 / cfg.render_fps) / cfg.dt))
@@ -112,8 +154,10 @@ def main() -> None:
 
             counter += 1
             if counter % cfg.decimation == 0:
-                push_obs_history(obs, build_features(data, action, cmd, cfg), layout, cfg.history_len)
-                action = infer_action(policy, obs, latest_obs_frame(obs, layout, cfg.history_len), cfg.idx_model2mj)
+                features = build_features(data, action, cmd, cfg)
+                single_obs = build_single_obs(features, layout)
+                action_tensor = policy(torch.from_numpy(single_obs).unsqueeze(0))
+                action = action_tensor.detach().cpu().numpy().squeeze()[cfg.idx_model2mj]
                 pos_history.append(action_to_target(action, cfg).copy())
                 target_pos = sample_delayed_targets(pos_history, ACTUATOR_GROUPS, cfg.delay_min, cfg.delay_max, delay_rng)
                 display_current_command(cmd)

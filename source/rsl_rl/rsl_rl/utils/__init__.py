@@ -14,8 +14,10 @@ from .utils import (
     split_and_pad_trajectories,
     unpad_trajectories,
 )
+from .exporter_cts import export_cts_policy_as_jit
 
 __all__ = [
+    "export_cts_policy_as_jit",
     "get_param",
     "resolve_callable",
     "resolve_nn_activation",
