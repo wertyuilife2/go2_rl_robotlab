@@ -49,7 +49,7 @@ python -m pip install -e source/rsl_rl
 To enable MuJoCo-based simulation:
 
 ```bash
-pip install mujoco  # tested on 3.4.0 and 3.6.0
+pip install mujoco pygame  # tested on 3.4.0 and 3.6.0
 ```
 
 ---
@@ -65,6 +65,29 @@ python scripts/rsl_rl/train.py --task=RobotLab-Go2-v0 --headless
 # Evaluate
 python scripts/rsl_rl/play.py --task=RobotLab-Go2-v0
 ```
+
+---
+
+### Training with RoboGauge Evaluation
+
+[RoboGauge](https://github.com/wty-yy/robogauge) provides an asynchronous suite for evaluating motion-control reinforcement learning policies, helping you select the best model. After installing RoboGauge by following the [installation guide](https://github.com/wty-yy/robogauge?tab=readme-ov-file#installation), start the RoboGauge server:
+
+```bash
+python robogauge/scripts/server.py --port 9973 --num-processes 32
+```
+
+In another terminal, start your training with RoboGauge evaluation enabled:
+
+```bash
+# Train
+python scripts/rsl_rl/train.py --task=RobotLab-Go2-v0 --headless --robogauge --robogauge_port 9973
+```
+
+Note on Asynchronous Evaluation:
+
+Since the evaluation runs asynchronously, the training loop receives the results from the previous evaluation in the next iteration. If evaluation is slower than training, tasks will be queued. Upon training completion, the process will wait for all remaining evaluation tasks to finish before exiting.
+
+Performance Example: On a system with an AMD EPYC 7763 and RTX 4090, a full evaluation takes approximately 5 minutes with num_processes=63. Training and saving checkpoints every 500 steps typically takes around 30 minutes.
 
 ---
 
