@@ -15,10 +15,10 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-import isaaclab.terrains as terrain_gen
 
 import robot_lab.tasks.go2.mdp as mdp
-from robot_lab.assets.unitree import UNITREE_GO2_CFG
+from robot_lab.assets.unitree import GO2_CFG_ROBOTLAB, GO2_CFG_UNITREE
+from robot_lab.tasks.go2.mdp.terrain import TERRAIN_CFG
 
 JOINT_NAMES = [
     "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
@@ -30,53 +30,6 @@ JOINT_NAMES = [
 BASE_LINK_NAME = "base"
 FOOT_LINK_NAME = ".*_foot"
 BASE_HEIGHT_TARGET = 0.38 # base height target for rewards, set as an attribute of the env config.
-
-##
-# Terrain definition
-##
-
-TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
-    size=(8.0, 8.0),
-    border_width=25.0,
-    num_rows=10,
-    num_cols=20,
-    horizontal_scale=0.1,
-    vertical_scale=0.005,
-    slope_threshold=0.75,
-    use_cache=False,
-    sub_terrains={
-        "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.15,
-            step_height_range=(0.05, 0.25),
-            step_width=0.3,
-            platform_width=3.0,
-            border_width=1.0,
-            holes=False,
-        ),
-        "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.20,
-            step_height_range=(0.05, 0.25),
-            step_width=0.3,
-            platform_width=3.0,
-            border_width=1.0,
-            holes=False,
-        ),
-        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
-            proportion=0.15, grid_width=0.45, grid_height_range=(0.025, 0.1), platform_width=2.0
-        ),
-        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.15, noise_range=(0.01, 0.06), noise_step=0.01, border_width=0.25
-        ),
-        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.15),
-        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.5), platform_width=2.0, border_width=0.25
-        ),
-        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.5), platform_width=2.0, border_width=0.25
-        ),
-    },
-)
-
 
 ##
 # Scene definition
@@ -93,9 +46,11 @@ class Go2SceneCfg(InteractiveSceneCfg):
         max_init_terrain_level=5,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
+            friction_combine_mode="average",
+            restitution_combine_mode="average",
             static_friction=1.0,
             dynamic_friction=1.0,
+            restitution=0.0,
         ),
         visual_material=sim_utils.MdlFileCfg(
             mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
@@ -105,7 +60,7 @@ class Go2SceneCfg(InteractiveSceneCfg):
         debug_vis=False
     )
 
-    robot: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = GO2_CFG_ROBOTLAB.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base",
@@ -319,19 +274,11 @@ class EventCfg:
             "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
         },
     )
-    randomize_com_positions_other = EventTerm(
-        func=mdp.randomize_rigid_body_com,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="^(?!.*base).*"), 
-            "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
-        },
-    )
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.8, 1.2),
+            "position_range": (0.5, 1.5),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -344,6 +291,14 @@ class EventCfg:
             "damping_distribution_params": (0.9, 1.1),
             "operation": "scale",
             "distribution": "uniform",
+        },
+    )
+    randomize_motor_zero_offset = EventTerm(
+        func=mdp.randomize_action_joint_pos_offset,
+        mode="reset",
+        params={
+            "action_term_name": "joint_pos",
+            "offset_range": (-0.035, 0.035),
         },
     )
     randomize_push_robot = EventTerm(
@@ -365,8 +320,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.5, 1.5),
-            "dynamic_friction_range": (0.5, 1.5),
+            "static_friction_range": (0.0, 2.0),
+            "dynamic_friction_range": (0.0, 2.0),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
             "make_consistent": True
@@ -387,15 +342,7 @@ class EventCfg:
             },
         },
     )
-    randomize_apply_external_force_torque = EventTerm(
-        func=mdp.apply_external_force_torque,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "force_range": (-5.0, 5.0),
-            "torque_range": (-5.0, 5.0),
-        },
-    )
+
         
 @configclass
 class RewardsCfg:
@@ -413,9 +360,13 @@ class RewardsCfg:
     )
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    # The dof_acc reward is not implemented on the same scale in Gym and Lab. 
+    # In Lab, it is computed at the physics-step level, 
+    # and because the L2 term is more sensitive to outliers, it can produce a larger penalty.
+    # Thus, we need to use a smaller weight for the dof_acc_l2 term in Lab compared to Gym.
     dof_acc_l2 = RewTerm(
         func=mdp.joint_acc_l2, 
-        weight=-2.5e-7,
+        weight=-1.0e-7, # gym和lab的dof_acc reward实现尺度不一样，lab是physic step level的，由于l2对于离群值的敏感性会导致更大的惩罚
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
     )
     joint_power = RewTerm(
@@ -523,8 +474,8 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
         
         # Physics material settings from subclass
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
-        self.sim.physx.gpu_collision_stack_size = int(64 * 1024 * 1024)  # 128 MB
+        self.sim.physx.gpu_max_rigid_patch_count = 512 * 1024
+        self.sim.physx.gpu_collision_stack_size = int(128 * 1024 * 1024)  # 128 MB
         self.sim.physx.enable_external_forces_every_iteration = True
 
         # Update sensor periods

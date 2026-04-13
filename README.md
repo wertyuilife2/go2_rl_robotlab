@@ -19,14 +19,14 @@ It is a reproduction of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym), adap
 
 ### 1. Install IsaacLab
 
-Install IsaacLab 2.3.0 release by following the [installation guide](https://isaac-sim.github.io/IsaacLab/release/2.3.0/source/setup/installation/pip_installation.html#).
+Install IsaacLab 2.3.0 release by following the [installation guide](https://isaac-sim.github.io/IsaacLab/release/2.3.0/source/setup/installation/pip_installation.html#). Please make sure to clone the IsaacLab repository and perform the installation using the release/2.3.0 branch.
 
 After installation, your environment should satisfies:
 
 ```bash
 isaacsim <= 5.1.0.0   # tested on 5.1.0.0
-isaaclab <= 0.53.1    # tested on 0.53.1
-isaaclab-rl <= 0.4.7  # tested on 0.4.7
+isaaclab <= 0.54.3    # tested on 0.54.3, 0.53.1
+isaaclab-rl <= 0.4.7  # tested on 0.4.7, 0.4.4
 ```
 
 Higher version may cause conflicts with our customized `rsl_rl==3.3.0` and `robot_lab==2.3.0`.
@@ -159,16 +159,15 @@ xml_path: "{ROOT_DIR}/resources/go2/your-custom-scene.xml"
 
 ## Differences from `go2_rl_gym`
 
-- Different terrain composition
 - Different tracking reward formulation (fixed sigma vs. dynamic sigma)
-- Lack domain_rand: randomize_motor_zero_offset
+- Different reward weights (e.g., lower dof_acc_l2 weight in Lab due to physics-step level implementation and sensitivity to outliers)
 - Lack domain_rand: randomize_motor_strength
 
 ---
 
 ## TODO
 
-- Try replacing ActionManager-level delay with `DelayedPDActuatorCfg`
+- Try replacing ActionManager-level delay with `DelayedPDActuatorCfg` or `UnitreeActuatorCfg_Go2HV`, and make sure the randomization of motor parameters  works correctly.
 
 ---
 

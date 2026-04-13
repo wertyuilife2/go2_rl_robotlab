@@ -1,9 +1,16 @@
 from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg, VecEnvStepReturn
-from robot_lab.tasks.go2.manager.action_manager import ActionManagerWithDelay
+from robot_lab.tasks.go2.manager.action_manager import ActionManagerGo2, ActionManagerGo2WithDelay
 
 import torch
 
-from isaaclab.ui.widgets import ManagerLiveVisualizer
+class Go2Env(ManagerBasedRLEnv):
+    cfg: ManagerBasedRLEnvCfg
+    
+    def load_managers(self):
+        super().load_managers()
+        # override action manager
+        self.action_manager = ActionManagerGo2(self.cfg.actions, self)
+        print("[Go2Env-INFO] Overriding action manager with ActionManagerGo2: ", self.action_manager)
 
 
 class ActionDelayGo2Env(ManagerBasedRLEnv):
@@ -21,7 +28,7 @@ class ActionDelayGo2Env(ManagerBasedRLEnv):
         # Call the parent class initializer
         super().__init__(cfg=cfg, render_mode=render_mode, **kwargs)
         print(
-            "[WARNING] You are using ActionDelayGo2Env; "
+            "[ActionDelayGo2Env-WARNING] You are using ActionDelayGo2Env; "
             "make sure all ActionTerms support multiple calls to process_actions() "
             "within a single step()."
         )
@@ -29,8 +36,8 @@ class ActionDelayGo2Env(ManagerBasedRLEnv):
     def load_managers(self):
         super().load_managers()
         # override action manager
-        self.action_manager = ActionManagerWithDelay(self.cfg.actions, self)
-        print("[INFO] Overriding action manager with ActionManagerWithDelay: ", self.action_manager)            
+        self.action_manager = ActionManagerGo2WithDelay(self.cfg.actions, self)
+        print("[ActionDelayGo2Env-INFO] Overriding action manager with ActionManagerGo2WithDelay: ", self.action_manager)            
         
     def step(self, action: torch.Tensor) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics and reset terminated environments.
@@ -126,3 +133,6 @@ class ActionDelayGo2Env(ManagerBasedRLEnv):
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+
+
+
