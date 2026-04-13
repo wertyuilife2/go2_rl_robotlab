@@ -160,6 +160,7 @@ xml_path: "{ROOT_DIR}/resources/go2/your-custom-scene.xml"
 ## Differences from `go2_rl_gym`
 
 - Different tracking reward formulation (fixed sigma vs. dynamic sigma)
+- Different reward weights (e.g., lower dof_acc_l2 weight in Lab due to physics-step level implementation and sensitivity to outliers)
 - Lack domain_rand: randomize_motor_strength
 
 ---

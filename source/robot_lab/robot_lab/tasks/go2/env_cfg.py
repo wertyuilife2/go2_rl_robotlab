@@ -367,9 +367,13 @@ class RewardsCfg:
     )
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    # The dof_acc reward is not implemented on the same scale in Gym and Lab. 
+    # In Lab, it is computed at the physics-step level, 
+    # and because the L2 term is more sensitive to outliers, it can produce a larger penalty.
+    # Thus, we need to use a smaller weight for the dof_acc_l2 term in Lab compared to Gym.
     dof_acc_l2 = RewTerm(
         func=mdp.joint_acc_l2, 
-        weight=-2.5e-7,
+        weight=-1.0e-7, # gym和lab的dof_acc reward实现尺度不一样，lab是physic step level的，由于l2对于离群值的敏感性会导致更大的惩罚
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
     )
     joint_power = RewTerm(
