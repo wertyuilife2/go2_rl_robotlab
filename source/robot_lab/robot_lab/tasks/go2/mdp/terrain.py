@@ -1,25 +1,3 @@
-# Copyright (c) 2024-2025 Ziqi Fan
-# SPDX-License-Identifier: Apache-2.0
-
-"""Terrain presets for the Go2 task.
-
-This module keeps two terrain configurations side by side:
-
-1. ``ORIGINAL_TERRAIN_CFG``:
-   The original RobotLab terrain setup that existed before Gym-alignment changes.
-   This is the default selection used by ``env_cfg.py`` so existing training behavior
-   is not changed.
-
-2. ``GYM_ALIGNED_TERRAIN_CFG``:
-   A Gym-oriented terrain setup derived from:
-   - ``legged_gym/envs/go2/go2_config.py``
-   - ``legged_gym/utils/terrain.py``
-   and interpreted with ``IS_HARD = True``.
-
-Only the terrain generator presets live here. The environment can choose either
-configuration without modifying the rest of the task code.
-"""
-
 from __future__ import annotations
 
 import numpy as np
@@ -31,10 +9,10 @@ from isaaclab.terrains.height_field.utils import height_field_to_mesh
 
 
 # -----------------------------------------------------------------------------
-# Original RobotLab terrain setup
+# Default RobotLab terrain setup
 # -----------------------------------------------------------------------------
 
-ORIGINAL_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
+DEFAULT_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
     border_width=25.0,
     num_rows=10,
@@ -94,12 +72,12 @@ ORIGINAL_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
 # -----------------------------------------------------------------------------
 
 
-def _gym_signed_pyramid_slope_height_field(
+def _signed_pyramid_slope_height_field(
     difficulty: float,
     cfg: terrain_gen.HfPyramidSlopedTerrainCfg,
     random_inverted: bool,
 ) -> np.ndarray:
-    """Generate a Gym-style pyramid slope with optional random sign."""
+    """Generate a pyramid slope with optional random sign."""
     slope = cfg.slope_range[0] + difficulty * (cfg.slope_range[1] - cfg.slope_range[0])
     if random_inverted and np.random.rand() < 0.5:
         slope = -slope
@@ -130,30 +108,30 @@ def _gym_signed_pyramid_slope_height_field(
 
 
 @height_field_to_mesh
-def gym_wave_terrain(difficulty: float, cfg) -> np.ndarray:
-    """Gym-style wave terrain: wave plus random uniform roughness."""
+def wave_terrain(difficulty: float, cfg) -> np.ndarray:
+    """wave terrain: wave plus random uniform roughness."""
     wave = hf_terrains.wave_terrain.__wrapped__(difficulty, cfg)
     rough = hf_terrains.random_uniform_terrain.__wrapped__(difficulty, cfg)
     return np.rint(wave + rough).astype(np.int16)
 
 
 @height_field_to_mesh
-def gym_slope_terrain(difficulty: float, cfg) -> np.ndarray:
-    """Gym-style slope terrain with 50/50 positive and negative slopes."""
-    return _gym_signed_pyramid_slope_height_field(difficulty, cfg, random_inverted=True)
+def slope_terrain(difficulty: float, cfg) -> np.ndarray:
+    """slope terrain with 50/50 positive and negative slopes."""
+    return _signed_pyramid_slope_height_field(difficulty, cfg, random_inverted=True)
 
 
 @height_field_to_mesh
-def gym_rough_slope_terrain(difficulty: float, cfg) -> np.ndarray:
-    """Gym-style rough slope terrain: slope plus random uniform roughness."""
-    slope = _gym_signed_pyramid_slope_height_field(difficulty, cfg, random_inverted=False)
+def rough_slope_terrain(difficulty: float, cfg) -> np.ndarray:
+    """rough slope terrain: slope plus random uniform roughness."""
+    slope = _signed_pyramid_slope_height_field(difficulty, cfg, random_inverted=False)
     rough = hf_terrains.random_uniform_terrain.__wrapped__(difficulty, cfg)
     return np.rint(slope + rough).astype(np.int16)
 
 
 @configclass
-class GymWaveTerrainCfg(terrain_gen.HfTerrainBaseCfg):
-    function = gym_wave_terrain
+class WaveTerrainCfg(terrain_gen.HfTerrainBaseCfg):
+    function = wave_terrain
     amplitude_range: tuple[float, float] = (0.1, 0.28)
     num_waves: int = 5
     noise_range: tuple[float, float] = (-0.05, 0.05)
@@ -162,15 +140,15 @@ class GymWaveTerrainCfg(terrain_gen.HfTerrainBaseCfg):
 
 
 @configclass
-class GymSlopeTerrainCfg(terrain_gen.HfTerrainBaseCfg):
-    function = gym_slope_terrain
+class SlopeTerrainCfg(terrain_gen.HfTerrainBaseCfg):
+    function = slope_terrain
     slope_range: tuple[float, float] = (0.1, 0.568)
     platform_width: float = 3.0
 
 
 @configclass
-class GymRoughSlopeTerrainCfg(terrain_gen.HfTerrainBaseCfg):
-    function = gym_rough_slope_terrain
+class RoughSlopeTerrainCfg(terrain_gen.HfTerrainBaseCfg):
+    function = rough_slope_terrain
     slope_range: tuple[float, float] = (0.1, 0.568)
     platform_width: float = 3.0
     noise_range: tuple[float, float] = (-0.05, 0.05)
@@ -178,7 +156,7 @@ class GymRoughSlopeTerrainCfg(terrain_gen.HfTerrainBaseCfg):
     downsampled_scale: float = 0.2
 
 
-GYM_ALIGNED_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
+TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
     border_width=25.0,
     num_rows=10,
@@ -188,21 +166,21 @@ GYM_ALIGNED_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     slope_threshold=0.75,
     use_cache=False,
     sub_terrains={
-        "wave": GymWaveTerrainCfg(
+        "wave": WaveTerrainCfg(
             proportion=0.05,
             border_width=0.0,
             horizontal_scale=0.1,
             vertical_scale=0.005,
             slope_threshold=0.75,
         ),
-        "slope": GymSlopeTerrainCfg(
+        "slope": SlopeTerrainCfg(
             proportion=0.20,
             border_width=0.0,
             horizontal_scale=0.1,
             vertical_scale=0.005,
             slope_threshold=0.75,
         ),
-        "rough_slope": GymRoughSlopeTerrainCfg(
+        "rough_slope": RoughSlopeTerrainCfg(
             proportion=0.05,
             border_width=0.0,
             horizontal_scale=0.1,
@@ -260,6 +238,3 @@ GYM_ALIGNED_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
         "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.15),
     },
 )
-
-
-DEFAULT_TERRAIN_CFG = GYM_ALIGNED_TERRAIN_CFG
