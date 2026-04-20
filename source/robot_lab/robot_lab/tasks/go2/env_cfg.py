@@ -18,7 +18,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import robot_lab.tasks.go2.mdp as mdp
 from robot_lab.assets.unitree import GO2_CFG_ROBOTLAB, GO2_CFG_UNITREE
-from robot_lab.tasks.go2.mdp.terrain import TERRAIN_CFG
+from robot_lab.tasks.go2.mdp.terrains import TERRAIN_CFG
 
 JOINT_NAMES = [
     "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",

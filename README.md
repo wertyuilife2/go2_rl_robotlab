@@ -19,23 +19,21 @@ It is a reproduction of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym), adap
 
 ### 1. Install IsaacLab
 
-Install IsaacLab v2.3.0 by following the [guide](https://isaac-sim.github.io/IsaacLab/v2.3.0/source/setup/quickstart.html#). Please make sure to clone the IsaacLab repository and perform the installation using the release/2.3.0 branch.
-
-After installation, your environment should satisfies:
+Install IsaacLab follow [official guide](https://isaac-sim.github.io/IsaacLab/v2.3.2/source/setup/installation/isaaclab_pip_installation.html):
 
 ```bash
-isaacsim <= 5.1.0.0   # tested on 5.1.0.0
-isaaclab <= 0.54.3    # tested on 0.54.3, 0.53.1
-isaaclab-rl <= 0.4.7  # tested on 0.4.7, 0.4.4
+conda create -n go2_rl_robotlab python=3.11
+conda activate go2_rl_robotlab
+pip install --upgrade pip
+pip install isaaclab[isaacsim,all]==2.3.2.post1 --extra-index-url https://pypi.nvidia.com
+pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
 ```
-
-Higher version may cause conflicts with our customized `rsl_rl==3.3.0` and `robot_lab==2.3.0`.
 
 ---
 
 ### 2. Install Customized RSL-RL and RobotLab
 
-We uses a customized version of `rsl_rl` and `robot_lab`. Install them in editable mode:
+We uses a customized version of `rsl_rl==3.3.0` and `robot_lab==2.3.0`. Install them in editable mode:
 
 ```bash
 python -m pip install -e source/robot_lab
@@ -183,7 +181,9 @@ xml_path: "{ROOT_DIR}/resources/go2/your-custom-scene.xml"
 ## Differences from `go2_rl_gym`
 
 - Different tracking reward formulation (fixed sigma vs. dynamic sigma)
-- Different reward weights (e.g., lower dof_acc_l2 weight in Lab due to physics-step level implementation and sensitivity to outliers)
+- Different rewards:
+  - lower dof_acc_l2 weight in Lab due to physics-step level implementation and sensitivity to outliers
+  - extra joint_pos_penalty_l1 reward in Lab due to better performance
 - Lack domain_rand: randomize_motor_strength
 
 ---
