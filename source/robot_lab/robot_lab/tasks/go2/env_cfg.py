@@ -46,7 +46,7 @@ class Go2SceneCfg(InteractiveSceneCfg):
         max_init_terrain_level=5,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="average",
+            friction_combine_mode="multiply",
             restitution_combine_mode="average",
             static_friction=1.0,
             dynamic_friction=1.0,
@@ -274,6 +274,14 @@ class EventCfg:
             "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
         },
     )
+    randomize_com_positions_other = EventTerm(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="^(?!.*base).*"),
+            "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
+        },
+    )
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
@@ -320,8 +328,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.0, 2.0),
-            "dynamic_friction_range": (0.0, 2.0),
+            "static_friction_range": (0.5, 1.5),
+            "dynamic_friction_range": (0.5, 1.5),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
             "make_consistent": True
@@ -485,8 +493,8 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
         
         # Physics material settings from subclass
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 512 * 1024
-        self.sim.physx.gpu_collision_stack_size = int(128 * 1024 * 1024)  # 128 MB
+        self.sim.physx.gpu_max_rigid_patch_count = int(1 * 1024 * 1024)  # 1 million
+        self.sim.physx.gpu_collision_stack_size = int(512 * 1024 * 1024)  # 128 MB
         self.sim.physx.enable_external_forces_every_iteration = True
 
         # Update sensor periods
