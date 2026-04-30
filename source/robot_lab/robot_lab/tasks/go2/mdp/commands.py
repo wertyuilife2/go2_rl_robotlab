@@ -94,7 +94,9 @@ class Go2RLGymCommand(CommandTerm):
             idxs = is_robot_on_terrain(self._env, terrain_type).nonzero().flatten()
             if len(idxs) > 0:
                 self.terrain_idxs[idxs] = self.terrain_type2idx[terrain_type]
-        self.terrain_length = self._env.scene.terrain.cfg.terrain_generator.size[0]
+        terrain_cfg = self._env.scene.terrain.cfg.terrain_generator
+        sub_terrain_border_width = getattr(terrain_cfg, "sub_terrain_border_width", 0.0) or 0.0
+        self.terrain_length = max(0.0, terrain_cfg.size[0] - 2.0 * sub_terrain_border_width)
 
     @property
     def command(self) -> torch.Tensor:

@@ -12,7 +12,22 @@ from isaaclab.terrains.height_field.utils import height_field_to_mesh
 class PerSubTerrainSlopeThresholdGenerator(TerrainGenerator):
     """Terrain generator that lets each height-field sub-terrain override slope_threshold."""
 
+    def __init__(self, cfg, device: str = "cpu"):
+        self._apply_sub_terrain_border_width(cfg)
+        super().__init__(cfg, device)
+
+    def _apply_sub_terrain_border_width(self, cfg):
+        border_width = getattr(cfg, "sub_terrain_border_width", None)
+        if border_width is None:
+            return
+
+        for sub_cfg in cfg.sub_terrains.values():
+            if hasattr(sub_cfg, "border_width"):
+                sub_cfg.border_width = border_width
+
     def _get_terrain_mesh(self, difficulty, cfg):
+        difficulty = self._maybe_use_gym_difficulty(difficulty)
+
         override = getattr(cfg, "slope_threshold_override", None)
         if override is None:
             return super()._get_terrain_mesh(difficulty, cfg)
@@ -23,6 +38,28 @@ class PerSubTerrainSlopeThresholdGenerator(TerrainGenerator):
             return super()._get_terrain_mesh(difficulty, cfg)
         finally:
             cfg.slope_threshold = original_slope_threshold
+
+    def _maybe_use_gym_difficulty(self, difficulty: float) -> float:
+        if not getattr(self.cfg, "use_gym_difficulty", False):
+            return difficulty
+
+        lower, upper = self.cfg.difficulty_range
+        if upper > lower:
+            normalized_difficulty = (float(difficulty) - lower) / (upper - lower)
+        else:
+            normalized_difficulty = float(difficulty)
+        normalized_difficulty = np.clip(normalized_difficulty, 0.0, 1.0)
+
+        num_levels = self.cfg.num_rows
+        level = min(int(np.floor(normalized_difficulty * num_levels)), num_levels - 1)
+        return level / num_levels
+
+
+@configclass
+class Go2TerrainGeneratorCfg(terrain_gen.TerrainGeneratorCfg):
+    class_type: type = PerSubTerrainSlopeThresholdGenerator
+    sub_terrain_border_width: float | None = None
+    use_gym_difficulty: bool = False
 
 
 def with_slope_threshold(sub_terrain_cfg, slope_threshold: float | None):
@@ -130,23 +167,23 @@ class RoughSlopeTerrainCfg(terrain_gen.HfPyramidSlopedTerrainCfg):
     downsampled_scale: float = 0.2
 
 
-TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
-    class_type=PerSubTerrainSlopeThresholdGenerator,
-    size=(8.0, 8.0),
+TERRAIN_CFG = Go2TerrainGeneratorCfg(
+    size=(9.0, 9.0),  # 8.0 terrain + 0.5*2 sub_terrain_border_width
     border_width=25.0,
+    sub_terrain_border_width=0.5,
     num_rows=10,
     num_cols=20,
     horizontal_scale=0.1,
     vertical_scale=0.005,
-    # slope correction = 0.75 ~ 36.9 degrees by default, 
+    # slope correction = 0.75 ~ 36.9 degrees by default,
     # but recommended to set for each terrain type separately using with_slope_threshold
-    slope_threshold=0.75,  
+    slope_threshold=0.75,
+    use_gym_difficulty=True,
     use_cache=False,
     sub_terrains={
         "wave": with_slope_threshold(
             WaveTerrainCfg(
                 proportion=0.05,
-                border_width=0.5,
             ),
             10.0, # effectively disable slope correction for wave terrain
         ),
@@ -155,7 +192,6 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
                 proportion=0.10,
                 slope_range=(0.1, 0.568),
                 platform_width=3.0,
-                border_width=0.5,
             ),
             10.0, # effectively disable slope correction for slope_up terrain
         ),
@@ -164,14 +200,12 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
                 proportion=0.10,
                 slope_range=(0.1, 0.568),
                 platform_width=3.0,
-                border_width=0.5,
             ),
             10.0, # effectively disable slope correction for slope_down terrain
         ),
         "rough_slope": with_slope_threshold(
             RoughSlopeTerrainCfg(
                 proportion=0.05,
-                border_width=0.5,
             ),
             10.0, # effectively disable slope correction for rough_slope terrain
         ),
@@ -181,7 +215,6 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
                 step_height_range=(0.05, 0.257),
                 step_width=0.31,
                 platform_width=3.0,
-                border_width=0.5,
             ),
             0.25, # enable slope correction for rough_slope terrain by 14.0 degrees, which is recommended for stairs terrain
         ),
@@ -191,7 +224,6 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
                 step_height_range=(0.05, 0.257),
                 step_width=0.31,
                 platform_width=3.0,
-                border_width=0.5,
             ),
             0.25, # enable slope correction for rough_slope terrain by 14.0 degrees, which is recommended for stairs terrain
         ),
@@ -202,7 +234,6 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
                 obstacle_height_range=(0.05, 0.275),
                 num_obstacles=20,
                 platform_width=3.0,
-                border_width=0.5,
             ),
             0.25, # enable slope correction for rough_slope terrain by 14.0 degrees
         ),
@@ -214,7 +245,6 @@ TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
                 stone_distance_range=(0.05, 0.10),
                 holes_depth=-10.0,
                 platform_width=4.0,
-                border_width=0.5,
             ),
             0.25, # enable slope correction for rough_slope terrain by 14.0 degrees
         ),

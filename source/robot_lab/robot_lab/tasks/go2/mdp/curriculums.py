@@ -209,7 +209,10 @@ def terrain_levels_vel_gym(env: ManagerBasedRLEnv, env_ids: Sequence[int]) -> fl
     resampling_time = command.cfg.resampling_time
     zero_prob = command.zero_command_prob
     
-    move_up = max_move_dist > terrain.cfg.terrain_generator.size[0] / 2
+    terrain_cfg = terrain.cfg.terrain_generator
+    sub_terrain_border_width = getattr(terrain_cfg, "sub_terrain_border_width", 0.0) or 0.0
+    terrain_length = max(0.0, terrain_cfg.size[0] - 2.0 * sub_terrain_border_width)
+    move_up = max_move_dist > terrain_length / 2
     target_dist = torch.norm(cmd_accum, dim=1) * (resampling_time * (1 - zero_prob))
     move_down = (max_move_dist < target_dist * 0.5) * ~move_up
     terrain.update_env_origins(env_ids, move_up, move_down)
