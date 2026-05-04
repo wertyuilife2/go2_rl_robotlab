@@ -360,15 +360,18 @@ class RewardsCfg:
     )
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-    # The dof_acc reward is not implemented on the same scale in Gym and Lab. 
-    # In Lab, it is computed at the physics-step level, 
-    # and because the L2 term is more sensitive to outliers, it can produce a larger penalty.
-    # Thus, we need to use a smaller weight for the dof_acc_l2 term in Lab compared to Gym.
-    dof_acc_l2 = RewTerm(
-        func=mdp.joint_acc_l2, 
+    
+    # The joint_acc reward is not computed on the same scale in Gym and Lab.
+    # In Gym, it is computed at the policy-step level,
+    # while in Lab, it is computed at the physics-step level.
+    # In Lab, the reward calculation is more precise, and because the L2 term is more sensitive to outliers.
+    # Thus, the reward value is overall higher, so we need to decrease the weights to be suitable for Lab.    
+    joint_acc_l2 = RewTerm(
+        func=mdp.joint_acc_l2,
         weight=-1.0e-7,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
     )
+    
     joint_power = RewTerm(
         func=mdp.joint_power,
         weight=-2e-5,
@@ -421,7 +424,7 @@ class RewardsCfg:
     )
     joint_pos_penalty_l1 = RewTerm(
         func=mdp.joint_pos_penalty_l1,
-        weight=-0.02,
+        weight=-0.01,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*_(thigh|calf)_joint"),
@@ -429,7 +432,7 @@ class RewardsCfg:
             "velocity_threshold": 0.1,
             "command_threshold": 0.1,
         },
-    )    
+    )
     
 @configclass
 class TerminationsCfg:

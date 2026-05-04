@@ -145,6 +145,8 @@ GO2_CFG_UNITREE = UnitreeArticulationCfg(
             stiffness=25.0,
             damping=0.5,
             friction=0.01,
+            min_delay=0,
+            max_delay=4,
         ),
     },
     # fmt: off
