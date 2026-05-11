@@ -60,7 +60,7 @@ class Go2SceneCfg(InteractiveSceneCfg):
         debug_vis=False
     )
 
-    robot: ArticulationCfg = GO2_CFG_ROBOTLAB.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = GO2_CFG_UNITREE.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base",

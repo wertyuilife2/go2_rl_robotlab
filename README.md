@@ -180,17 +180,15 @@ xml_path: "{ROOT_DIR}/resources/go2/your-custom-scene.xml"
 
 ## Differences from `go2_rl_gym`
 
-- Different tracking reward formulation (fixed sigma vs. dynamic sigma)
-- Different rewards:
+- Motor:
+  - use official unitree motor model instead of simple PD controller
+- Rewards:
+  - different tracking reward form (fixed sigma vs. dynamic sigma)
   - lower joint_acc_l2 weight in Lab due to physics-step level implementation and sensitivity to outliers
   - extra joint_pos_penalty_l1 reward in Lab due to better performance
-- Lack domain_rand: randomize_motor_strength
-
----
-
-## TODO
-
-- Try replacing ActionManager-level delay with `DelayedPDActuatorCfg` or `UnitreeActuatorCfg_Go2HV`, and make sure the randomization of motor parameters  works correctly.
+- Domain randomization: 
+  - no randomized action delay, use motor-level delay instead
+  - no motor strength randomization due to implementation constraints in Lab.
 
 ---
 
