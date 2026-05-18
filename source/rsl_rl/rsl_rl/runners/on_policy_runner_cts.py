@@ -83,6 +83,7 @@ class OnPolicyRunnerCTS:
             from robogauge.scripts.client import RoboGaugeClient
 
             self.robogauge_client = RoboGaugeClient(f"http://127.0.0.1:{robogauge_cfg.get('port', 9973)}")
+            self.robogauge_client.wait_until_available()
         except Exception as e:
             print(f"[INFO] RoboGauge client could not be initialized: {e}, disabling RoboGauge interface.")
             self.robogauge_client = None
