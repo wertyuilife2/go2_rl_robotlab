@@ -1,19 +1,87 @@
 <div align="center">
 	<h1 align="center">Go2 RL RobotLab</h1>
+	<a href="https://robogauge.github.io/complete/">
+		<img src="https://img.shields.io/badge/Project-Page-green.svg" alt="Project Page"/>
+	</a>
+	<a href="https://robogauge.github.io/static/files/arxiv.pdf">
+		<img src="https://img.shields.io/badge/Paper-RSS%202025-blue.svg" alt="RSS 2025 Paper"/>
+	</a>
+	<a href="https://arxiv.org/abs/2602.00678">
+		<img src="https://img.shields.io/badge/arXiv-2602.00678-b31b1b.svg" alt="arXiv:2602.00678"/>
+	</a>
+	<a href="https://github.com/wty-yy/go2_rl_gym">
+		<img src="https://img.shields.io/badge/IsaacGym-go2__rl__gym-orange.svg" alt="IsaacGym go2_rl_gym"/>
+	</a>
 </div>
 
 ## Overview
 
+Train a Unitree Go2 robot in IsaacLab, and deploy policy to MuJoCo for Sim2Sim. For more, see the [project page](https://robogauge.github.io/complete/).
 
-Train the Unitree Go2 robot with MoE-CTS in IsaacLab, and deploys policy to MuJoCo for Sim2Sim.
-
-It is a official reproduction of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym), adapted to the IsaacLab / RobotLab ecosystem.
+It is an official [MoE-CTS](https://robogauge.github.io/static/files/arxiv.pdf) algorithm implementation in IsaacLab / RobotLab, as a reproduction of [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym).
 
 ---
 
 <p align="center">
-  <img src="resources/go2/isaaclab_scene.png" width="70%"/>
+  <img src="resources/results/isaaclab_scene.png" width="70%"/>
 </p>
+
+---
+
+## Demos
+
+<p align="center">
+  <b>Train in IsaacLab → validate with MuJoCo Sim2Sim → evaluate on the real Unitree Go2.</b>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <b>IsaacLab Play</b><br/>
+      <sub>Policy rollout in the IsaacLab environment.</sub><br/><br/>
+      <img src="https://raw.githubusercontent.com/wertyuilife2/picture-bed/main/go2_rl_robotlab/demo-isaaclab.gif" width="80%"/>
+    </td>
+    <td width="50%" align="center">
+      <b>MuJoCo Sim2Sim</b><br/>
+      <sub>Exported policy running in MuJoCo before real-world deployment.</sub><br/><br/>
+      <img src="https://raw.githubusercontent.com/wertyuilife2/picture-bed/main/go2_rl_robotlab/demo-sim2sim.gif" width="80%"/>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <b>Real Robot</b><br/>
+      <sub>Robust walking front on stairs.</sub><br/><br/>
+      <img src="https://raw.githubusercontent.com/wertyuilife2/picture-bed/main/go2_rl_robotlab/demo-real-walk-front.gif" width="100%"/>
+    </td>
+    <td width="50%" align="center">
+      <b>Real Robot</b><br/>
+      <sub>Robust walking sideways on stairs.</sub><br/><br/>
+      <img src="https://raw.githubusercontent.com/wertyuilife2/picture-bed/main/go2_rl_robotlab/demo-real-walk-side.gif" width="100%"/>
+    </td>
+  </tr>
+</table>
+
+---
+
+## RoboGauge Benchmark
+
+<p align="center">
+  <b><a href="https://github.com/wty-yy/RoboGauge">RoboGauge</a> score comparison between go2_rl_robotlab and the original go2_rl_gym.</b>
+</p>
+
+<p align="center">
+  <img src="resources/results/robogauge_compare.png" width="100%"/>
+</p>
+
+### Algorithm Results (Best of 150k training steps)
+
+| Model | Score | Tracking  | Safety  | Quality  | Level |
+| --- | --- | --- | --- | --- | --- |
+| go2_moe_cts (go2_rl_robotlab) | **0.6828** | **0.6785** | 0.7552 | **0.7645** | **8.17** |
+| go2_moe_cts (go2_rl_gym) | **0.6713** | 0.6669 | **0.7857** | 0.7392 | 7.85 |
+| [CTS](https://arxiv.org/pdf/2405.10830) vanilla | 0.5786 | 0.5755 | 0.7066 | 0.6624 | 6.83 |
+| [HIM](https://github.com/InternRobotics/HIMLoco) | 0.5379 | 0.5453 | 0.6476 | 0.6050 | 6.19 |
+| [DreamWaQ](https://arxiv.org/abs/2301.10602) | 0.5054 | 0.5105 | 0.6149 | 0.5730 | 5.74 |
 
 ---
 

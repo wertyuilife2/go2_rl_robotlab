@@ -72,14 +72,12 @@ __pycache__/
 
 # ML checkpoints / datasets
 *.pth
-*.onnx
 *.npz
 *.npy
 
 # Large ML artifacts (do not commit)
 *.pth
 *.ckpt
-*.onnx
 
 # logs
 logs/

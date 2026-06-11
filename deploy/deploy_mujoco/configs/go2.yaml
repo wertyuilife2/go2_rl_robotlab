@@ -1,8 +1,8 @@
-policy_path: "{ROOT_DIR}/deploy/pre_train/go2/xxx.pt" # policy.pt exported by running scripts/rsl_rl/play.py
+policy_path: "{ROOT_DIR}/deploy/pre_train/go2/go2_moe_cts_185k_0.6828.pt" # policy.pt exported by running scripts/rsl_rl/play.py
 
-xml_path: "{ROOT_DIR}/resource/go2/stairs.xml"
+xml_path: "{ROOT_DIR}/resources/go2/stairs_and_slope.xml"
 
-render_fps: 240
+render_fps: 300
 video_fps: 60
 save_video: false
 

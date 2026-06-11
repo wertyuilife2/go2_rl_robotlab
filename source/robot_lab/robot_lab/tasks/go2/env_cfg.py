@@ -159,7 +159,7 @@ class ObservationsCfg:
             scale=1.0,
         )
         def __post_init__(self):
-            self.history_length = 5
+            self.history_length = 10
             self.enable_corruption = True
             self.concatenate_terms = True
             self.flatten_history_dim = True

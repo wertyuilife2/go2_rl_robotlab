@@ -1,0 +1,39 @@
+<mujoco model="stairs_and_slope">
+  <include file="go2.xml"/>
+ 
+  <statistic center="0 0 0.1" extent="0.8"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-130" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <body name="stairs" pos="2 0 0">
+    <geom name="step_0" type="box" size="0.15 3.0 0.095" pos="0.15 0 0.095" rgba="1 1 1 1"/>
+    <geom name="step_1" type="box" size="0.15 3.0 0.095" pos="0.45 0 0.285" rgba="1 1 1 1"/>
+    <geom name="step_2" type="box" size="0.15 3.0 0.095" pos="0.75 0 0.475" rgba="1 1 1 1"/>
+    <geom name="step_3" type="box" size="0.15 3.0 0.095" pos="1.05 0 0.665" rgba="1 1 1 1"/>
+    <geom name="step_4" type="box" size="0.15 3.0 0.095" pos="1.35 0 0.855" rgba="1 1 1 1"/>
+    <geom name="step_5" type="box" size="0.15 3.0 0.095" pos="1.65 0 1.045" rgba="1 1 1 1"/>
+    <geom name="step_6" type="box" size="0.15 3.0 0.095" pos="1.95 0 1.235" rgba="1 1 1 1"/>
+    <geom name="step_7" type="box" size="0.15 3.0 0.095" pos="2.25 0 1.425" rgba="1 1 1 1"/>
+    <geom name="step_8" type="box" size="0.15 3.0 0.095" pos="2.55 0 1.615" rgba="1 1 1 1"/>
+    <geom name="step_9" type="box" size="0.15 3.0 0.095" pos="2.85 0 1.805" rgba="1 1 1 1"/>
+    </body>
+
+    <!-- 斜坡：从最后一阶末端（X=6）开始，向下倾斜0.4rad，水平长度约4.493m，白色 -->
+    <geom name="ramp" type="box" size="2.2465 3.0 0.1" pos="7.0465 0 0.95" rgba="1 1 1 1" euler="0 0.4 0"/>
+  </worldbody>
+</mujoco>
