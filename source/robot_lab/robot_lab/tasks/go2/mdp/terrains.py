@@ -178,7 +178,7 @@ TERRAIN_CFG = Go2TerrainGeneratorCfg(
     # slope correction = 0.75 ~ 36.9 degrees by default,
     # but recommended to set for each terrain type separately using with_slope_threshold
     slope_threshold=0.75,
-    use_gym_difficulty=True,
+    use_gym_difficulty=False,
     use_cache=False,
     sub_terrains={
         "wave": with_slope_threshold(

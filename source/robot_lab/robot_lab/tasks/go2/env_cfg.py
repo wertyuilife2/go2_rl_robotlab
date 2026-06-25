@@ -350,12 +350,12 @@ class RewardsCfg:
 
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_exp, 
-        weight=1.0, 
+        weight=2.0, 
         params={"command_name": "base_velocity", "std": 0.5}
     )
     track_ang_vel_z_exp = RewTerm(
         func=mdp.track_ang_vel_z_exp, 
-        weight=0.5, 
+        weight=1.0, 
         params={"command_name": "base_velocity", "std": 0.5}
     )
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
@@ -466,7 +466,7 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
     """Merged configuration for the Go2 robot on rough terrain."""
 
     # Scene settings
-    scene: Go2SceneCfg = Go2SceneCfg(num_envs=8192, env_spacing=0.5)
+    scene: Go2SceneCfg = Go2SceneCfg(num_envs=16384, env_spacing=0.5)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()

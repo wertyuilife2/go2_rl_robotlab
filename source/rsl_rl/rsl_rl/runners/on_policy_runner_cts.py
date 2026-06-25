@@ -18,12 +18,12 @@ from rsl_rl.env import VecEnv
 from rsl_rl.modules import (
     ActorCriticMoECTS,
     resolve_rnd_config,
-    resolve_symmetry_config,
 )
 from rsl_rl.storage import RolloutStorageCTS
 from rsl_rl.utils import resolve_callable, resolve_obs_groups
 from rsl_rl.utils.logger_cts import LoggerCTS
 from rsl_rl.utils.exporter_cts import export_cts_policy_as_jit
+from rsl_rl.utils.symmetry import resolve_symmetry_config
 
 
 def numpy_representer(dumper: yaml.SafeDumper, data: np.floating) -> yaml.Node:

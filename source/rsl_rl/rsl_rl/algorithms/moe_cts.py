@@ -15,6 +15,7 @@ import itertools
 from rsl_rl.modules import ActorCriticMoECTS
 from rsl_rl.modules.rnd import RandomNetworkDistillation
 from rsl_rl.storage import RolloutStorageCTS
+from rsl_rl.utils.symmetry import Symmetry
 
 
 class MoECTS:
@@ -82,9 +83,7 @@ class MoECTS:
             self.rnd_optimizer = None
 
         # Symmetry components
-        if symmetry_cfg is not None:
-            print("[WARNING] `symmetry_cfg` detected, but MoECTS does not currently support symmetry; the configuration will be ignored.")
-        self.symmetry = None
+        self.symmetry = Symmetry(**symmetry_cfg) if symmetry_cfg is not None else None
 
         # PPO components
         self.policy = policy
@@ -235,7 +234,10 @@ class MoECTS:
 
         # Get mini batch generator
         generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
+        if self.symmetry is not None:
+            generator = self.symmetry.augment_batch_generator(generator)
         data = list(generator)
+        num_updates = len(data)
 
         # Iterate over batches
         teacher_samples = self.teacher_num_envs * self.storage.num_transitions_per_env // self.num_mini_batches
@@ -415,7 +417,6 @@ class MoECTS:
             mean_load_balance_loss += load_balance_loss.item()
 
         # Divide the losses by the number of updates
-        num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
         mean_entropy /= num_updates
