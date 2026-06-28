@@ -20,10 +20,10 @@ from rsl_rl.modules import (
     resolve_rnd_config,
 )
 from rsl_rl.storage import RolloutStorageCTS
-from rsl_rl.utils import resolve_callable, resolve_obs_groups
+from rsl_rl.utils import resolve_obs_groups
 from rsl_rl.utils.logger_cts import LoggerCTS
 from rsl_rl.utils.exporter_cts import export_cts_policy_as_jit
-from rsl_rl.utils.symmetry import resolve_symmetry_config
+from rsl_rl.utils import resolve_callable
 
 
 def numpy_representer(dumper: yaml.SafeDumper, data: np.floating) -> yaml.Node:
@@ -365,9 +365,6 @@ class OnPolicyRunnerCTS:
         # Resolve RND config if used
         self.alg_cfg = resolve_rnd_config(self.alg_cfg, obs, self.cfg["obs_groups"], self.env)
 
-        # Resolve symmetry config if used
-        self.alg_cfg = resolve_symmetry_config(self.alg_cfg, self.env)
-
         # Resolve deprecated normalization config
         if self.cfg.get("empirical_normalization") is not None:
             warnings.warn(
@@ -381,11 +378,14 @@ class OnPolicyRunnerCTS:
                 self.policy_cfg["critic_obs_normalization"] = self.cfg["empirical_normalization"]
 
         # Initialize the policy
-        # actor_critic_class = resolve_callable(self.policy_cfg.pop("class_name"))
         actor_critic_class = eval(self.policy_cfg.pop("class_name")) # temporally use eval to avoid import bugs
         actor_critic: ActorCriticMoECTS = actor_critic_class(
             obs, self.cfg["obs_groups"], self.env.num_actions, **self.policy_cfg
         ).to(self.device)
+
+        # Symmetry augmentation
+        symmetry_cfg = self.alg_cfg.pop("symmetry_cfg")
+        symmetry = resolve_callable(symmetry_cfg["symmetry_class"])(self.env) if symmetry_cfg["use_symmetric_augmentation"] else None
 
         # Initialize the storage
         storage = RolloutStorageCTS(
@@ -393,10 +393,9 @@ class OnPolicyRunnerCTS:
         )
 
         # Initialize the algorithm
-        # alg_class = resolve_callable(self.alg_cfg.pop("class_name"))
         alg_class = eval(self.alg_cfg.pop("class_name")) # temporally use eval to avoid import bugs
         alg: MoECTS = alg_class(
-            actor_critic, storage, self.env.num_envs, device=self.device, **self.alg_cfg, multi_gpu_cfg=self.multi_gpu_cfg
+            actor_critic, storage, self.env.num_envs, device=self.device, symmetry=symmetry, **self.alg_cfg, multi_gpu_cfg=self.multi_gpu_cfg
         )
 
         return alg

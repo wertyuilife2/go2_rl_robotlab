@@ -14,7 +14,6 @@ from tensordict import TensorDict
 from rsl_rl.modules import ActorCritic, ActorCriticCNN, ActorCriticRecurrent
 from rsl_rl.modules.rnd import RandomNetworkDistillation
 from rsl_rl.storage import RolloutStorage
-from rsl_rl.utils import resolve_callable
 
 
 class PPO:
@@ -43,8 +42,6 @@ class PPO:
         device: str = "cpu",
         # RND parameters
         rnd_cfg: dict | None = None,
-        # Symmetry parameters
-        symmetry_cfg: dict | None = None,
         # Distributed training parameters
         multi_gpu_cfg: dict | None = None,
     ) -> None:
@@ -72,29 +69,6 @@ class PPO:
         else:
             self.rnd = None
             self.rnd_optimizer = None
-
-        # Symmetry components
-        if symmetry_cfg is not None:
-            # Check if symmetry is enabled
-            use_symmetry = symmetry_cfg["use_data_augmentation"] or symmetry_cfg["use_mirror_loss"]
-            # Print that we are not using symmetry
-            if not use_symmetry:
-                print("Symmetry not used for learning. We will use it for logging instead.")
-            # Resolve the data augmentation function (supports string names or direct callables)
-            symmetry_cfg["data_augmentation_func"] = resolve_callable(symmetry_cfg["data_augmentation_func"])
-            # Check valid configuration
-            if not callable(symmetry_cfg["data_augmentation_func"]):
-                raise ValueError(
-                    f"Symmetry configuration exists but the function is not callable: "
-                    f"{symmetry_cfg['data_augmentation_func']}"
-                )
-            # Check if the policy is compatible with symmetry
-            if isinstance(policy, ActorCriticRecurrent):
-                raise ValueError("Symmetry augmentation is not supported for recurrent policies.")
-            # Store symmetry configuration
-            self.symmetry = symmetry_cfg
-        else:
-            self.symmetry = None
 
         # PPO components
         self.policy = policy
@@ -195,8 +169,6 @@ class PPO:
         mean_entropy = 0
         # RND loss
         mean_rnd_loss = 0 if self.rnd else None
-        # Symmetry loss
-        mean_symmetry_loss = 0 if self.symmetry else None
 
         # Get mini batch generator
         if self.policy.is_recurrent:
@@ -217,41 +189,19 @@ class PPO:
             hidden_states_batch,
             masks_batch,
         ) in generator:
-            num_aug = 1  # Number of augmentations per sample. Starts at 1 for no augmentation.
-            original_batch_size = obs_batch.batch_size[0]
-
             # Check if we should normalize advantages per mini batch
             if self.normalize_advantage_per_mini_batch:
                 with torch.no_grad():
                     advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-8)
-
-            # Perform symmetric augmentation
-            if self.symmetry and self.symmetry["use_data_augmentation"]:
-                # Augmentation using symmetry
-                data_augmentation_func = self.symmetry["data_augmentation_func"]
-                # Returned shape: [batch_size * num_aug, ...]
-                obs_batch, actions_batch = data_augmentation_func(
-                    obs=obs_batch,
-                    actions=actions_batch,
-                    env=self.symmetry["_env"],
-                )
-                # Compute number of augmentations per sample
-                num_aug = int(obs_batch.batch_size[0] / original_batch_size)
-                # Repeat the rest of the batch
-                old_actions_log_prob_batch = old_actions_log_prob_batch.repeat(num_aug, 1)
-                target_values_batch = target_values_batch.repeat(num_aug, 1)
-                advantages_batch = advantages_batch.repeat(num_aug, 1)
-                returns_batch = returns_batch.repeat(num_aug, 1)
 
             # Recompute actions log prob and entropy for current batch of transitions
             # Note: We need to do this because we updated the policy with the new parameters
             self.policy.act(obs_batch, masks=masks_batch, hidden_state=hidden_states_batch[0])
             actions_log_prob_batch = self.policy.get_actions_log_prob(actions_batch)
             value_batch = self.policy.evaluate(obs_batch, masks=masks_batch, hidden_state=hidden_states_batch[1])
-            # Note: We only keep the entropy of the first augmentation (the original one)
-            mu_batch = self.policy.action_mean[:original_batch_size]
-            sigma_batch = self.policy.action_std[:original_batch_size]
-            entropy_batch = self.policy.entropy[:original_batch_size]
+            mu_batch = self.policy.action_mean
+            sigma_batch = self.policy.action_std
+            entropy_batch = self.policy.entropy
 
             # Compute KL divergence and adapt the learning rate
             if self.desired_kl is not None and self.schedule == "adaptive":
@@ -310,46 +260,13 @@ class PPO:
 
             loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean()
 
-            # Symmetry loss
-            if self.symmetry:
-                # Obtain the symmetric actions
-                # Note: If we did augmentation before then we don't need to augment again
-                if not self.symmetry["use_data_augmentation"]:
-                    data_augmentation_func = self.symmetry["data_augmentation_func"]
-                    obs_batch, _ = data_augmentation_func(obs=obs_batch, actions=None, env=self.symmetry["_env"])
-                    # Compute number of augmentations per sample
-                    num_aug = int(obs_batch.shape[0] / original_batch_size)
-
-                # Actions predicted by the actor for symmetrically-augmented observations
-                mean_actions_batch = self.policy.act_inference(obs_batch.detach().clone())
-
-                # Compute the symmetrically augmented actions
-                # Note: We are assuming the first augmentation is the original one. We do not use the action_batch from
-                # earlier since that action was sampled from the distribution. However, the symmetry loss is computed
-                # using the mean of the distribution.
-                action_mean_orig = mean_actions_batch[:original_batch_size]
-                _, actions_mean_symm_batch = data_augmentation_func(
-                    obs=None, actions=action_mean_orig, env=self.symmetry["_env"]
-                )
-
-                # Compute the loss
-                mse_loss = torch.nn.MSELoss()
-                symmetry_loss = mse_loss(
-                    mean_actions_batch[original_batch_size:], actions_mean_symm_batch.detach()[original_batch_size:]
-                )
-                # Add the loss to the total loss
-                if self.symmetry["use_mirror_loss"]:
-                    loss += self.symmetry["mirror_loss_coeff"] * symmetry_loss
-                else:
-                    symmetry_loss = symmetry_loss.detach()
-
             # RND loss
             # TODO: Move this processing to inside RND module.
             if self.rnd:
                 # Extract the rnd_state
                 # TODO: Check if we still need torch no grad. It is just an affine transformation.
                 with torch.no_grad():
-                    rnd_state_batch = self.rnd.get_rnd_state(obs_batch[:original_batch_size])
+                    rnd_state_batch = self.rnd.get_rnd_state(obs_batch)
                     rnd_state_batch = self.rnd.state_normalizer(rnd_state_batch)
                 # Predict the embedding and the target
                 predicted_embedding = self.rnd.predictor(rnd_state_batch)
@@ -384,9 +301,6 @@ class PPO:
             # RND loss
             if mean_rnd_loss is not None:
                 mean_rnd_loss += rnd_loss.item()
-            # Symmetry loss
-            if mean_symmetry_loss is not None:
-                mean_symmetry_loss += symmetry_loss.item()
 
         # Divide the losses by the number of updates
         num_updates = self.num_learning_epochs * self.num_mini_batches
@@ -395,8 +309,6 @@ class PPO:
         mean_entropy /= num_updates
         if mean_rnd_loss is not None:
             mean_rnd_loss /= num_updates
-        if mean_symmetry_loss is not None:
-            mean_symmetry_loss /= num_updates
 
         # Clear the storage
         self.storage.clear()
@@ -409,8 +321,6 @@ class PPO:
         }
         if self.rnd:
             loss_dict["rnd"] = mean_rnd_loss
-        if self.symmetry:
-            loss_dict["symmetry"] = mean_symmetry_loss
 
         return loss_dict
 

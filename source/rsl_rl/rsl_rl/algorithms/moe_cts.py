@@ -15,7 +15,7 @@ import itertools
 from rsl_rl.modules import ActorCriticMoECTS
 from rsl_rl.modules.rnd import RandomNetworkDistillation
 from rsl_rl.storage import RolloutStorageCTS
-from rsl_rl.utils.symmetry import Symmetry
+from robot_lab.tasks.go2.mdp.symmetry import Go2MoECTSSymmetry
 
 
 class MoECTS:
@@ -48,10 +48,9 @@ class MoECTS:
         teacher_env_ratio: float = 0.75,
         normalize_advantage_per_mini_batch: bool = False,
         device: str = "cpu",
+        symmetry: Go2MoECTSSymmetry | None = None,
         # RND parameters
         rnd_cfg: dict | None = None,
-        # Symmetry parameters
-        symmetry_cfg: dict | None = None,
         # Distributed training parameters
         multi_gpu_cfg: dict | None = None,
     ) -> None:
@@ -83,7 +82,9 @@ class MoECTS:
             self.rnd_optimizer = None
 
         # Symmetry components
-        self.symmetry = Symmetry(**symmetry_cfg) if symmetry_cfg is not None else None
+        self.symmetry = symmetry
+        if self.rnd is not None and self.symmetry is not None:
+            raise RuntimeError("RND is not supported with MoECTS symmetry data augmentation.")
 
         # PPO components
         self.policy = policy
@@ -232,16 +233,23 @@ class MoECTS:
         # RND loss
         mean_rnd_loss = 0 if self.rnd else None
 
-        # Get mini batch generator
-        generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
-        if self.symmetry is not None:
-            generator = self.symmetry.augment_batch_generator(generator)
-        data = list(generator)
-        num_updates = len(data)
-
         # Iterate over batches
         teacher_samples = self.teacher_num_envs * self.storage.num_transitions_per_env // self.num_mini_batches
         student_samples = self.student_num_envs * self.storage.num_transitions_per_env // self.num_mini_batches
+
+        # Get mini batch generator
+        generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
+        num_aug = 1
+        mask = torch.ones(teacher_samples + student_samples, dtype=torch.bool, device=self.device)
+        if self.symmetry is not None:
+            num_aug = self.symmetry.num_aug
+            mask = self.symmetry.get_original_mask(teacher_samples, student_samples, self.device)
+            generator = self.symmetry.augment_batch_generator(generator, teacher_samples)
+        data = list(generator)
+        teacher_samples *= num_aug
+        student_samples *= num_aug
+        num_updates = len(data)
+
         for (
             obs_batch,
             actions_batch,
@@ -254,7 +262,6 @@ class MoECTS:
             hidden_states_batch,
             masks_batch,
         ) in data:
-            original_batch_size = obs_batch.batch_size[0]
 
             # Check if we should normalize advantages per mini batch
             if self.normalize_advantage_per_mini_batch:
@@ -270,7 +277,9 @@ class MoECTS:
                 entropy = self.policy.entropy
                 return actions_log_prob, value, mu, sigma, entropy
             teacher_results = _get_results(0, teacher_samples, is_teacher=True)
-            student_results = _get_results(teacher_samples, teacher_samples + student_samples, is_teacher=False)
+            student_results = _get_results(
+                teacher_samples, teacher_samples + student_samples, is_teacher=False
+            )
             results = []
             for x1, x2 in zip(teacher_results, student_results):
                 results.append(torch.cat([x1, x2], dim=0))
@@ -280,9 +289,9 @@ class MoECTS:
             if self.desired_kl is not None and self.schedule == "adaptive":
                 with torch.inference_mode():
                     kl = torch.sum(
-                        torch.log(sigma_batch / old_sigma_batch + 1.0e-5)
-                        + (torch.square(old_sigma_batch) + torch.square(old_mu_batch - mu_batch))
-                        / (2.0 * torch.square(sigma_batch))
+                        torch.log(sigma_batch[mask] / old_sigma_batch[mask] + 1.0e-5)
+                        + (torch.square(old_sigma_batch[mask]) + torch.square(old_mu_batch[mask] - mu_batch[mask]))
+                        / (2.0 * torch.square(sigma_batch[mask]))
                         - 0.5,
                         axis=-1,
                     )
@@ -342,7 +351,7 @@ class MoECTS:
                 # Extract the rnd_state
                 # TODO: Check if we still need torch no grad. It is just an affine transformation.
                 with torch.no_grad():
-                    rnd_state_batch = self.rnd.get_rnd_state(obs_batch[:original_batch_size])
+                    rnd_state_batch = self.rnd.get_rnd_state(obs_batch)
                     rnd_state_batch = self.rnd.state_normalizer(rnd_state_batch)
                 # Predict the embedding and the target
                 predicted_embedding = self.rnd.predictor(rnd_state_batch)

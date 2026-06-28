@@ -1,14 +1,5 @@
 from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
-from isaaclab_rl.rsl_rl.symmetry_cfg import RslRlSymmetryCfg
-
-@configclass
-class RslRlMoeCtsSymmetryCfg:
-    use_data_augmentation: bool = True
-    # Whether to use symmetry data augmentation.
-
-    data_augmentation_generator: str = "robot_lab.tasks.go2.mdp.symmetry:data_augmentation_generator"
-    # Generator for symmetry batch.
 
 @configclass
 class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
@@ -40,6 +31,10 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         max_grad_norm=1.0,
     )
 
+@configclass
+class MoeCtsSymmetryCfg:
+    use_symmetric_augmentation = True
+    symmetry_class = "robot_lab.tasks.go2.mdp.symmetry:Go2MoECTSSymmetry"
 
 @configclass
 class RslRlMoeCtsActorCriticCfg(RslRlPpoActorCriticCfg):
@@ -76,7 +71,7 @@ class RslRlMoeCtsAlgorithmCfg(RslRlPpoAlgorithmCfg):
     desired_kl = 0.01
     max_grad_norm = 1.0
     teacher_env_ratio = 0.75  # percentage of envs assigned to teacher
-    symmetry_cfg = RslRlMoeCtsSymmetryCfg()
+    symmetry_cfg = MoeCtsSymmetryCfg()
 
 @configclass
 class MoECTSRunnerCfg(RslRlOnPolicyRunnerCfg):

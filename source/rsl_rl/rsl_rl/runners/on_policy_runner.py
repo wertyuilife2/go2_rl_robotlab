@@ -22,7 +22,6 @@ from rsl_rl.modules import (
 from rsl_rl.storage import RolloutStorage
 from rsl_rl.utils import resolve_callable, resolve_obs_groups
 from rsl_rl.utils.logger import Logger
-from rsl_rl.utils.symmetry import resolve_symmetry_config
 
 
 class OnPolicyRunner:
@@ -250,9 +249,7 @@ class OnPolicyRunner:
         """Construct the actor-critic algorithm."""
         # Resolve RND config if used
         self.alg_cfg = resolve_rnd_config(self.alg_cfg, obs, self.cfg["obs_groups"], self.env)
-
-        # Resolve symmetry config if used
-        self.alg_cfg = resolve_symmetry_config(self.alg_cfg, self.env)
+        self.alg_cfg.pop("symmetry_cfg")
 
         # Resolve deprecated normalization config
         if self.cfg.get("empirical_normalization") is not None:

@@ -59,19 +59,3 @@ runner:
         num_outputs: 1  # Number of outputs of RND network. Note: if -1, then the network will use dimensions of the observation
         predictor_hidden_dims: [-1] # Hidden dimensions of predictor network
         target_hidden_dims: [-1]  # Hidden dimensions of target network
-
-    # Symmetry augmentation
-    symmetry_cfg:
-      use_data_augmentation: true  # This adds symmetric trajectories to the batch
-      use_mirror_loss: false  # This adds symmetry loss term to the loss function
-      data_augmentation_func: null # String containing the module and function name to import
-      # Example: "legged_gym.envs.locomotion.anymal_c.symmetry:get_symmetric_states"
-      #
-      # .. code-block:: python
-      #
-      #     @torch.no_grad()
-      #     def get_symmetric_states(
-      #        obs: Optional[torch.Tensor] = None, actions: Optional[torch.Tensor] = None, cfg: "BaseEnvCfg" = None, obs_type: str = "policy"
-      #     ) -> Tuple[torch.Tensor, torch.Tensor]:
-      #
-      mirror_loss_coeff: 0.0 # Coefficient for symmetry loss term. If 0, no symmetry loss is used
