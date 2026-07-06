@@ -343,7 +343,7 @@ class MoECTS:
             else:
                 value_loss = (returns_batch - value_batch).pow(2).mean()
 
-            loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean()
+            loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch[mask].mean()
 
             # RND loss
             # TODO: Move this processing to inside RND module.
