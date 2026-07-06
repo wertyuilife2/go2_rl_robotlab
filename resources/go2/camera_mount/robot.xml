@@ -1,0 +1,44 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/8c8c53c216a1df34f1f97b84/w/141a3b7a0708bfe1c6a4de68/e/5032eb55fc40a52e23c96aec -->
+<mujoco model="camera_mount_thick">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="camera_mount_thick">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <!-- Link camera_base -->
+    <body name="camera_base" pos="0 0 0" quat="1 0 0 0" childclass="camera_mount_thick">
+      <freejoint name="camera_base_freejoint"/>
+      <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
+      <!-- Part camera_mount_thick -->
+      <geom type="mesh" class="visual" pos="-0 -0.002512 0.0335" quat="1 -0 -0 -0" mesh="camera_mount_thick" material="camera_mount_thick_material"/>
+      <geom type="mesh" class="collision" pos="-0 -0.002512 0.0335" quat="1 -0 -0 -0" mesh="camera_mount_thick" material="camera_mount_thick_material"/>
+      <!-- Part camera_base -->
+      <geom type="mesh" class="visual" pos="-0 -1.20037e-05 0" quat="1 -0 -0 0" mesh="camera_base" material="camera_base_material"/>
+      <geom type="mesh" class="collision" pos="-0 -1.20037e-05 0" quat="1 -0 -0 0" mesh="camera_base" material="camera_base_material"/>
+      <!-- Part camera_d435 -->
+      <geom type="mesh" class="visual" pos="-0 -0.0309136 0.0179006" quat="0.48481 0.87462 0 0" mesh="camera_d435" material="camera_d435_material"/>
+      <geom type="mesh" class="collision" pos="-0 -0.0309136 0.0179006" quat="0.48481 0.87462 0 0" mesh="camera_d435" material="camera_d435_material"/>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="camera_d435.stl"/>
+    <mesh file="camera_mount_thick.stl"/>
+    <mesh file="camera_base.stl"/>
+    <material name="camera_mount_thick_material" rgba="0.917647 0.917647 0.917647 1"/>
+    <material name="camera_base_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="camera_d435_material" rgba="0.917647 0.917647 0.917647 1"/>
+  </asset>
+  <actuator/>
+  <equality/>
+</mujoco>

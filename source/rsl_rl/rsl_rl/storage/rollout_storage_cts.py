@@ -201,7 +201,139 @@ class RolloutStorageCTS:
 
     # For reinforcement learning with recurrent networks
     def recurrent_mini_batch_generator(self, num_mini_batches: int, num_epochs: int = 8) -> Generator:
-        return NotImplementedError("CTS rollout storage does not support RNNs yet.")
+        if self.training_type != "rl":
+            raise ValueError("This function is only available for reinforcement learning training.")
+
+        teacher_mini_batch_size = self.teacher_num_envs // num_mini_batches
+        student_mini_batch_size = self.student_num_envs // num_mini_batches
+        if teacher_mini_batch_size == 0 or student_mini_batch_size == 0:
+            raise ValueError(
+                "CTS recurrent mini-batches require at least one teacher and one student environment per mini-batch."
+            )
+
+        def _cat_hidden_state(hidden_state_1, hidden_state_2):
+            if hidden_state_1 is None and hidden_state_2 is None:
+                return None
+            if isinstance(hidden_state_1, tuple):
+                return tuple(torch.cat([h1, h2], dim=1) for h1, h2 in zip(hidden_state_1, hidden_state_2))
+            return torch.cat([hidden_state_1, hidden_state_2], dim=1)
+
+        for epoch in range(num_epochs):
+            for i in range(num_mini_batches):
+                teacher_start = i * teacher_mini_batch_size
+                teacher_stop = (i + 1) * teacher_mini_batch_size
+                student_start = self.teacher_num_envs + i * student_mini_batch_size
+                student_stop = self.teacher_num_envs + (i + 1) * student_mini_batch_size
+
+                teacher_obs, teacher_masks = split_and_pad_trajectories(
+                    self.observations[:, teacher_start:teacher_stop],
+                    self.dones[:, teacher_start:teacher_stop],
+                )
+                student_obs, student_masks = split_and_pad_trajectories(
+                    self.observations[:, student_start:student_stop],
+                    self.dones[:, student_start:student_stop],
+                )
+
+                obs_batch = torch.cat([teacher_obs, student_obs], dim=1)
+                masks_batch_tensor = torch.cat([teacher_masks, student_masks], dim=1)
+                actions_batch = torch.cat(
+                    [self.actions[:, teacher_start:teacher_stop], self.actions[:, student_start:student_stop]], dim=1
+                )
+                old_mu_batch = torch.cat(
+                    [self.mu[:, teacher_start:teacher_stop], self.mu[:, student_start:student_stop]], dim=1
+                )
+                old_sigma_batch = torch.cat(
+                    [self.sigma[:, teacher_start:teacher_stop], self.sigma[:, student_start:student_stop]], dim=1
+                )
+                returns_batch = torch.cat(
+                    [self.returns[:, teacher_start:teacher_stop], self.returns[:, student_start:student_stop]], dim=1
+                )
+                advantages_batch = torch.cat(
+                    [self.advantages[:, teacher_start:teacher_stop], self.advantages[:, student_start:student_stop]],
+                    dim=1,
+                )
+                values_batch = torch.cat(
+                    [self.values[:, teacher_start:teacher_stop], self.values[:, student_start:student_stop]], dim=1
+                )
+                old_actions_log_prob_batch = torch.cat(
+                    [
+                        self.actions_log_prob[:, teacher_start:teacher_stop],
+                        self.actions_log_prob[:, student_start:student_stop],
+                    ],
+                    dim=1,
+                )
+
+                teacher_hidden_state_a = self._get_hidden_state_segment(
+                    self.saved_hidden_state_a, teacher_start, teacher_stop
+                )
+                teacher_hidden_state_c = self._get_hidden_state_segment(
+                    self.saved_hidden_state_c, teacher_start, teacher_stop
+                )
+                student_hidden_state_a = self._get_hidden_state_segment(
+                    self.saved_hidden_state_a, student_start, student_stop
+                )
+                student_hidden_state_c = self._get_hidden_state_segment(
+                    self.saved_hidden_state_c, student_start, student_stop
+                )
+
+                hidden_state_a_batch = _cat_hidden_state(teacher_hidden_state_a, student_hidden_state_a)
+                hidden_state_c_batch = _cat_hidden_state(teacher_hidden_state_c, student_hidden_state_c)
+                masks_batch = {
+                    "masks": masks_batch_tensor,
+                    "teacher_trajectories": teacher_masks.shape[1],
+                    "teacher_envs": teacher_mini_batch_size,
+                    "student_envs": student_mini_batch_size,
+                }
+
+                yield (
+                    obs_batch,
+                    actions_batch,
+                    values_batch,
+                    advantages_batch,
+                    returns_batch,
+                    old_actions_log_prob_batch,
+                    old_mu_batch,
+                    old_sigma_batch,
+                    (
+                        hidden_state_a_batch,
+                        hidden_state_c_batch,
+                    ),
+                    masks_batch,
+                )
+
+    def _get_hidden_state_segment(self, saved_hidden_state, env_start: int, env_stop: int):
+        if saved_hidden_state is None:
+            return None
+
+        dones = self.dones[:, env_start:env_stop].squeeze(-1)
+        last_was_done = torch.zeros_like(dones, dtype=torch.bool)
+        last_was_done[1:] = dones[:-1].bool()
+        last_was_done[0] = True
+        last_was_done = last_was_done.permute(1, 0)
+
+        hidden_state_batch = [
+            saved_hidden_state_i[:, :, env_start:env_stop]
+            .permute(2, 0, 1, 3)[last_was_done]
+            .transpose(1, 0)
+            .contiguous()
+            for saved_hidden_state_i in saved_hidden_state
+        ]
+        return hidden_state_batch[0] if len(hidden_state_batch) == 1 else tuple(hidden_state_batch)
 
     def _save_hidden_states(self, hidden_states: tuple[HiddenState, HiddenState]) -> None:
-        return NotImplementedError("CTS rollout storage does not support RNNs yet.")
+        if hidden_states == (None, None):
+            return
+        hidden_state_a = hidden_states[0] if isinstance(hidden_states[0], tuple) else (hidden_states[0],)
+        hidden_state_c = hidden_states[1] if isinstance(hidden_states[1], tuple) else (hidden_states[1],)
+        if self.saved_hidden_state_a is None:
+            self.saved_hidden_state_a = [
+                torch.zeros(self.observations.shape[0], *hidden_state_a[i].shape, device=self.device)
+                for i in range(len(hidden_state_a))
+            ]
+            self.saved_hidden_state_c = [
+                torch.zeros(self.observations.shape[0], *hidden_state_c[i].shape, device=self.device)
+                for i in range(len(hidden_state_c))
+            ]
+        for i in range(len(hidden_state_a)):
+            self.saved_hidden_state_a[i][self.step].copy_(hidden_state_a[i])
+            self.saved_hidden_state_c[i][self.step].copy_(hidden_state_c[i])

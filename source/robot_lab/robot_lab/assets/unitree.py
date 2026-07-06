@@ -158,3 +158,10 @@ GO2_CFG_UNITREE = UnitreeArticulationCfg(
     ],
     # fmt: on
 )
+
+
+# Go2 with the D435i camera mount meshes.
+GO2_CFG_UNITREE_D435I = GO2_CFG_UNITREE.copy()
+GO2_CFG_UNITREE_D435I.spawn = GO2_CFG_UNITREE.spawn.replace(
+    asset_path=f"{ISAACLAB_ASSETS_DATA_DIR}/go2/urdf/go2_d435i.urdf",
+)

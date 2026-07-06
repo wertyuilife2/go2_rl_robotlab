@@ -181,6 +181,13 @@ class Go2SymmetryMapper:
             return value.reshape(*value.shape[:-1], ny, nx).flip(-2).reshape_as(value)
         return value.reshape(*value.shape[:-1], nx, ny).flip(-1).reshape_as(value)
 
+    def reverse_depth_image(self, value: torch.Tensor) -> torch.Tensor:
+        """Horizontally flip a flattened square depth image."""
+        side = math.isqrt(value.shape[-1])
+        if side * side != value.shape[-1]:
+            return value
+        return value.reshape(*value.shape[:-1], side, side).flip(-1).reshape_as(value)
+
     def reverse_term(self, name: str, cfg, value: torch.Tensor) -> torch.Tensor:
         """Mirror one observation term according to its semantic name.
 
@@ -200,6 +207,8 @@ class Go2SymmetryMapper:
             return self.reverse_feet(value)
         if name == "height_scan":
             return self.reverse_height_scan(cfg, value)
+        if name == "depth_image":
+            return self.reverse_depth_image(value)
         return value
 
     def reverse_obs_group(self, group_name: str, value: torch.Tensor) -> torch.Tensor:
@@ -454,3 +463,119 @@ class Go2MoECTSSymmetry:
                 hidden_states_batch,
                 masks_batch,
             )
+
+    def repeat_recurrent_hidden_state(self, hidden_state, teacher_trajectories: int):
+        """Repeat recurrent hidden states for original and mirrored trajectories.
+
+        Hidden states are duplicated, not mirrored, because they are rollout
+        memory seeds for the corresponding original/mirrored observation
+        sequences.
+        """
+        if hidden_state is None:
+            return None
+        if isinstance(hidden_state, tuple):
+            return tuple(self.repeat_recurrent_hidden_state(state, teacher_trajectories) for state in hidden_state)
+
+        teacher_hidden = hidden_state[:, :teacher_trajectories]
+        student_hidden = hidden_state[:, teacher_trajectories:]
+        return torch.cat([teacher_hidden, teacher_hidden, student_hidden, student_hidden], dim=1)
+
+    def repeat_recurrent_time_env(self, value: torch.Tensor, teacher_envs: int) -> torch.Tensor:
+        """Repeat teacher and student time/env tensors along the env axis."""
+        teacher_value = value[:, :teacher_envs]
+        student_value = value[:, teacher_envs:]
+        return torch.cat([teacher_value, teacher_value, student_value, student_value], dim=1)
+
+    def augment_recurrent_time_env(
+        self,
+        value: torch.Tensor,
+        teacher_envs: int,
+        mirror_fn,
+    ) -> torch.Tensor:
+        """Append mirrored teacher and student sequences along the env axis."""
+        teacher_value = value[:, :teacher_envs]
+        student_value = value[:, teacher_envs:]
+        return torch.cat(
+            [
+                teacher_value,
+                mirror_fn(teacher_value),
+                student_value,
+                mirror_fn(student_value),
+            ],
+            dim=1,
+        )
+
+    def augment_recurrent_obs(self, obs_batch: TensorDict, teacher_trajectories: int) -> TensorDict:
+        """Append mirrored teacher and student padded trajectory observations."""
+        teacher_obs = obs_batch[:, :teacher_trajectories]
+        student_obs = obs_batch[:, teacher_trajectories:]
+        return torch.cat(
+            [
+                teacher_obs,
+                self.mapper.reverse_obs(teacher_obs),
+                student_obs,
+                self.mapper.reverse_obs(student_obs),
+            ],
+            dim=1,
+        )
+
+    def repeat_recurrent_masks(self, masks: torch.Tensor, teacher_trajectories: int) -> torch.Tensor:
+        """Repeat padded trajectory masks for original and mirrored sequences."""
+        teacher_masks = masks[:, :teacher_trajectories]
+        student_masks = masks[:, teacher_trajectories:]
+        return torch.cat([teacher_masks, teacher_masks, student_masks, student_masks], dim=1)
+
+    def augment_recurrent_batch(
+        self,
+        obs_batch: TensorDict,
+        actions_batch: torch.Tensor,
+        target_values_batch: torch.Tensor,
+        advantages_batch: torch.Tensor,
+        returns_batch: torch.Tensor,
+        old_actions_log_prob_batch: torch.Tensor,
+        old_mu_batch: torch.Tensor,
+        old_sigma_batch: torch.Tensor,
+        hidden_states_batch,
+        masks_batch: dict,
+    ):
+        """Append mirrored recurrent MoECTS sequences while preserving CTS ordering."""
+        teacher_trajectories = masks_batch["teacher_trajectories"]
+        teacher_envs = masks_batch["teacher_envs"]
+
+        obs_batch = self.augment_recurrent_obs(obs_batch, teacher_trajectories)
+        actions_batch = self.augment_recurrent_time_env(actions_batch, teacher_envs, self.mapper.reverse_joints)
+        old_mu_batch = self.augment_recurrent_time_env(old_mu_batch, teacher_envs, self.mapper.reverse_joints)
+        old_sigma_batch = self.augment_recurrent_time_env(old_sigma_batch, teacher_envs, self.mapper.permute_joints)
+        target_values_batch = self.repeat_recurrent_time_env(target_values_batch, teacher_envs)
+        advantages_batch = self.repeat_recurrent_time_env(advantages_batch, teacher_envs)
+        returns_batch = self.repeat_recurrent_time_env(returns_batch, teacher_envs)
+        old_actions_log_prob_batch = self.repeat_recurrent_time_env(old_actions_log_prob_batch, teacher_envs)
+
+        hidden_states_batch = tuple(
+            self.repeat_recurrent_hidden_state(hidden_state, teacher_trajectories)
+            for hidden_state in hidden_states_batch
+        )
+        masks_batch = {
+            **masks_batch,
+            "masks": self.repeat_recurrent_masks(masks_batch["masks"], teacher_trajectories),
+            "teacher_trajectories": teacher_trajectories * self.num_aug,
+            "teacher_envs": teacher_envs * self.num_aug,
+            "student_envs": masks_batch["student_envs"] * self.num_aug,
+        }
+        return (
+            obs_batch,
+            actions_batch,
+            target_values_batch,
+            advantages_batch,
+            returns_batch,
+            old_actions_log_prob_batch,
+            old_mu_batch,
+            old_sigma_batch,
+            hidden_states_batch,
+            masks_batch,
+        )
+
+    def augment_recurrent_batch_generator(self, generator):
+        """Yield original-plus-mirrored recurrent MoECTS mini-batches."""
+        for batch in generator:
+            yield self.augment_recurrent_batch(*batch)

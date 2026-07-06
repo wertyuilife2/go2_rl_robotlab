@@ -17,6 +17,7 @@ from rsl_rl.algorithms import MoECTS
 from rsl_rl.env import VecEnv
 from rsl_rl.modules import (
     ActorCriticMoECTS,
+    ActorCriticMoECTSCNNGRU,
     resolve_rnd_config,
 )
 from rsl_rl.storage import RolloutStorageCTS

@@ -1,0 +1,61 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/8c8c53c216a1df34f1f97b84/w/141a3b7a0708bfe1c6a4de68/e/5032eb55fc40a52e23c96aec -->
+<robot name="camera_mount_thick">
+  <!-- Link camera_base -->
+  <link name="camera_base">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+    <!-- Part camera_mount_thick -->
+    <visual>
+      <origin xyz="-0 -0.002512 0.0335" rpy="-0 -0 -0"/>
+      <geometry>
+        <mesh filename="package://assets/camera_mount_thick.stl"/>
+      </geometry>
+      <material name="camera_mount_thick_material">
+        <color rgba="0.917647 0.917647 0.917647 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0.002512 0.0335" rpy="-0 -0 -0"/>
+      <geometry>
+        <mesh filename="package://assets/camera_mount_thick.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part camera_base -->
+    <visual>
+      <origin xyz="-0 -1.20037e-05 0" rpy="-0 0 0"/>
+      <geometry>
+        <mesh filename="package://assets/camera_base.stl"/>
+      </geometry>
+      <material name="camera_base_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -1.20037e-05 0" rpy="-0 0 0"/>
+      <geometry>
+        <mesh filename="package://assets/camera_base.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part camera_d435 -->
+    <visual>
+      <origin xyz="-0 -0.0309136 0.0179006" rpy="2.1293 -0 -0"/>
+      <geometry>
+        <mesh filename="package://assets/camera_d435.stl"/>
+      </geometry>
+      <material name="camera_d435_material">
+        <color rgba="0.917647 0.917647 0.917647 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0.0309136 0.0179006" rpy="2.1293 -0 -0"/>
+      <geometry>
+        <mesh filename="package://assets/camera_d435.stl"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>

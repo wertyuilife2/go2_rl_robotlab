@@ -52,6 +52,20 @@ class RslRlMoeCtsActorCriticCfg(RslRlPpoActorCriticCfg):
     critic_obs_normalization = False
 
 @configclass
+class RslRlMoeCtsCnnGruActorCriticCfg(RslRlMoeCtsActorCriticCfg):
+    class_name = "ActorCriticMoECTSCNNGRU"
+    actor_image_obs_groups = ["depth"]
+    critic_image_obs_groups = ["privileged_depth"]
+    image_shape = (60, 60)
+    cnn_channels = (16, 32, 64)
+    cnn_kernel_size = 3
+    cnn_stride = 2
+    cnn_padding = 1
+    cnn_pooled_shape = (15, 15)
+    gru_hidden_dim = 225
+    gru_num_layers = 1
+
+@configclass
 class RslRlMoeCtsAlgorithmCfg(RslRlPpoAlgorithmCfg):
     class_name = "MoECTS"
     value_loss_coef = 1.0
@@ -82,6 +96,19 @@ class MoECTSRunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 500
     policy = RslRlMoeCtsActorCriticCfg()
     algorithm = RslRlMoeCtsAlgorithmCfg()
+
+@configclass
+class MoECTSD435iRunnerCfg(MoECTSRunnerCfg):
+    experiment_name = "go2_moe_cts_d435i"
+    policy = RslRlMoeCtsCnnGruActorCriticCfg()
+    obs_groups = {
+        "policy": ["policy", "depth"],
+        "critic": ["critic", "privileged_depth"],
+    }
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.algorithm.symmetry_cfg.use_symmetric_augmentation = True
 
 @configclass
 class MoECTSSymmetryRunnerCfg(MoECTSRunnerCfg):
