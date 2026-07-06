@@ -14,6 +14,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+from robot_lab.tasks.go2.mdp.utils import is_robot_on_terrain
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -114,21 +115,20 @@ def joint_pos_penalty_l1(
     command_name: str,
     asset_cfg: SceneEntityCfg,
     stand_still_scale: float,
-    velocity_threshold: float,
-    command_threshold: float,
+    stand_cmd_idxs: list[int] = [0, 1, 2],
 ) -> torch.Tensor:
     """Penalize joint position error from default on the articulation."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    cmd = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1)
-    body_vel = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
+    cmd = torch.linalg.norm(env.command_manager.get_command(command_name)[:, stand_cmd_idxs], dim=1)
     running_reward = torch.linalg.norm(
         (asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1, ord=1
     )
+    flat_mask = is_robot_on_terrain(env, 'flat', asset_cfg.name)
     reward = torch.where(
-        torch.logical_or(cmd > command_threshold, body_vel > velocity_threshold),
-        running_reward,
+        torch.logical_and(cmd < 1e-3, flat_mask),
         stand_still_scale * running_reward,
+        running_reward,
     )
     return reward
 
@@ -549,28 +549,6 @@ def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scen
     reward = torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
     return reward
 
-
-def hip_pos_penalty_l1(
-        env: ManagerBasedRLEnv,
-        command_name: str,
-        asset_cfg: SceneEntityCfg,
-        stand_still_scale: float,
-        command_threshold: float,
-) -> torch.Tensor:
-    """Penalize joint position error from default on the articulation."""
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    command = env.command_manager.get_command(command_name)[:, [1, 2]]
-    cmd_large = torch.any(torch.abs(command) > command_threshold, dim=1)
-    running_reward = torch.linalg.norm(
-        (asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1, ord=1
-    )
-    reward = torch.where(
-        cmd_large,
-        running_reward,
-        stand_still_scale * running_reward
-    )
-    return reward
 
 def feet_regulation(
     env: ManagerBasedRLEnv,

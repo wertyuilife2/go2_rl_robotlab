@@ -243,7 +243,7 @@ class Go2RLGymCommand(CommandTerm):
             zero_mask = (rand_prob >= min_prob) * (rand_prob < max_prob) * (next_time_left > 0.0)
             zero_env_ids = env_ids[zero_mask]
             if len(zero_env_ids) > 0:
-                self.commands[zero_env_ids, :2] = 0.0
+                self.commands[zero_env_ids] = 0.0
                 self.time_left[zero_env_ids] = next_time_left[zero_mask]
                 if self.cfg.limit_ang_vel_at_zero_command_prob > 0.0:
                     ang_vel_rand = torch.rand(len(zero_env_ids), device=self.device)  # independent distribution

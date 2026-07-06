@@ -33,7 +33,7 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 @configclass
 class MoeCtsSymmetryCfg:
-    use_symmetric_augmentation = True
+    use_symmetric_augmentation = False
     symmetry_class = "robot_lab.tasks.go2.mdp.symmetry:Go2MoECTSSymmetry"
 
 @configclass
@@ -82,6 +82,13 @@ class MoECTSRunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 500
     policy = RslRlMoeCtsActorCriticCfg()
     algorithm = RslRlMoeCtsAlgorithmCfg()
+
+@configclass
+class MoECTSSymmetryRunnerCfg(MoECTSRunnerCfg):
+    experiment_name = "go2_moe_cts_symmetry"
+    def __post_init__(self):
+        super().__post_init__()
+        self.algorithm.symmetry_cfg.use_symmetric_augmentation = True
 
 # concat elu inspired by concat relu from https://arxiv.org/pdf/2303.07507
 @configclass
