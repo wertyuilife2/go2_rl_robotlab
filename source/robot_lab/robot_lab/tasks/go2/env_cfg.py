@@ -413,13 +413,13 @@ class RewardsCfg:
         },
     )
     hip_pos_penalty_l1 = RewTerm(
-        func=mdp.hip_pos_penalty_l1,
+        func=mdp.joint_pos_penalty_l1,
         weight=-0.05,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hip_joint"),
-            "stand_still_scale": 1.0,
-            "command_threshold": 0.1,
+            "stand_still_scale": 10.0,
+            "stand_cmd_idxs": [1, 2],
         },
     )
     joint_pos_penalty_l1 = RewTerm(
@@ -428,9 +428,7 @@ class RewardsCfg:
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*_(thigh|calf)_joint"),
-            "stand_still_scale": 1.0,
-            "velocity_threshold": 0.1,
-            "command_threshold": 0.1,
+            "stand_still_scale": 10.0,
         },
     )
     
@@ -508,3 +506,7 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
             if self.scene.terrain.terrain_generator is not None:
                 self.scene.terrain.terrain_generator.curriculum = False
                 
+class Go2EnvSymmetryCfg(Go2EnvCfg):
+    """Environment configuration with symmetry augmentation for MoE CTS."""
+    # Scene settings
+    scene: Go2SceneCfg = Go2SceneCfg(num_envs=8192, env_spacing=0.5)
