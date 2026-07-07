@@ -1,3 +1,5 @@
+import math
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
@@ -9,7 +11,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, TiledCameraCfg, patterns
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
@@ -17,7 +19,12 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import robot_lab.tasks.go2.mdp as mdp
 from robot_lab.assets.unitree import GO2_CFG_ROBOTLAB, GO2_CFG_UNITREE, GO2_CFG_UNITREE_D435I
+from robot_lab.sensors import DelayRayCasterCameraCfg, process_depth_image
 from robot_lab.tasks.go2.mdp.terrains import TERRAIN_CFG
+
+###
+# Constants
+###
 
 JOINT_NAMES = [
     "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
@@ -29,20 +36,21 @@ JOINT_NAMES = [
 BASE_LINK_NAME = "base"
 FOOT_LINK_NAME = ".*_foot"
 BASE_HEIGHT_TARGET = 0.38 # base height target for rewards, set as an attribute of the env config.
-D435I_DEPTH_WIDTH = 640
-D435I_DEPTH_HEIGHT = 480
+
+# --- Camera ---
+D435I_DEPTH_WIDTH = 60  # center crop of the original image
+D435I_DEPTH_HEIGHT = 60
+D435I_INTRINSIC_WIDTH = 106  # original image width to calculate the focal length x
+D435I_INTRINSIC_HEIGHT = 60
+D435I_HORIZONTAL_FOV_DEG = 87.0
+D435I_VERTICAL_FOV_DEG = 58.0
+D435I_FOV_RANDOMIZATION_DEG = 3.0
+D435I_PRINCIPAL_POINT_RANDOMIZATION_PX = 1.0
 D435I_DEPTH_MAX = 10.0
-D435I_DEPTH_DECIMATION = 8
-D435I_DEPTH_CROP_SIZE = (60, 60)
-D435I_CAMERA_UPDATE_HZ = 10.0
+D435I_DEPTH_IMAGE_SHAPE = (D435I_DEPTH_HEIGHT, D435I_DEPTH_WIDTH)
+D435I_CAMERA_UPDATE_HZ = 50.0
 D435I_CAMERA_UPDATE_PERIOD = 1.0 / D435I_CAMERA_UPDATE_HZ
-# Nominal D435i depth intrinsics derived from Intel's published H:87 V:58 depth FOV.
-# For a physical camera, use librealsense get_intrinsics() for the selected stream profile.
-D435I_DEPTH_INTRINSICS = [
-    337.209640089908, 0.0, D435I_DEPTH_WIDTH * 0.5,
-    0.0, 432.97146126514167, D435I_DEPTH_HEIGHT * 0.5,
-    0.0, 0.0, 1.0,
-]
+D435I_CAMERA_MAX_DELAY = 0.1
 # Final D435i sensor pose relative to the Go2 base frame. The position is the
 # composed URDF chain: base -> front_camera -> camera_base -> camera_d435.
 D435I_CAMERA_POS_BASE = (0.3264636, -0.00003, 0.0947706)
@@ -119,20 +127,48 @@ class Go2D435iSceneCfg(Go2SceneCfg):
 
     robot: ArticulationCfg = GO2_CFG_UNITREE_D435I.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-    front_depth_camera = TiledCameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base/front_depth_camera",
+    front_depth_camera = DelayRayCasterCameraCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base",
         update_period=D435I_CAMERA_UPDATE_PERIOD,
-        offset=TiledCameraCfg.OffsetCfg(pos=D435I_CAMERA_POS_BASE, rot=D435I_CAMERA_ROT_BASE, convention="world"),
+        offset=DelayRayCasterCameraCfg.OffsetCfg(
+            pos=D435I_CAMERA_POS_BASE,
+            rot=D435I_CAMERA_ROT_BASE,
+            convention="world",
+        ),
+        mesh_prim_paths=["/World/ground"],
         data_types=["distance_to_image_plane"],
-        spawn=sim_utils.PinholeCameraCfg.from_intrinsic_matrix(
-            intrinsic_matrix=D435I_DEPTH_INTRINSICS,
+        max_distance=D435I_DEPTH_MAX,
+        max_delay=D435I_CAMERA_MAX_DELAY,
+        horizontal_fov_range=(
+            D435I_HORIZONTAL_FOV_DEG - D435I_FOV_RANDOMIZATION_DEG,
+            D435I_HORIZONTAL_FOV_DEG + D435I_FOV_RANDOMIZATION_DEG,
+        ),
+        vertical_fov_range=(
+            D435I_VERTICAL_FOV_DEG - D435I_FOV_RANDOMIZATION_DEG,
+            D435I_VERTICAL_FOV_DEG + D435I_FOV_RANDOMIZATION_DEG,
+        ),
+        intrinsic_width=D435I_INTRINSIC_WIDTH,
+        intrinsic_height=D435I_INTRINSIC_HEIGHT,
+        principal_point_jitter=D435I_PRINCIPAL_POINT_RANDOMIZATION_PX,
+        randomize_intrinsics_on_reset=False,
+        depth_clipping_behavior="max",
+        pattern_cfg=patterns.PinholeCameraPatternCfg.from_intrinsic_matrix(
+            intrinsic_matrix=[
+                D435I_INTRINSIC_WIDTH / (2.0 * math.tan(math.radians(D435I_HORIZONTAL_FOV_DEG) / 2.0)),
+                0.0,
+                D435I_DEPTH_WIDTH * 0.5,
+                0.0,
+                D435I_INTRINSIC_HEIGHT / (2.0 * math.tan(math.radians(D435I_VERTICAL_FOV_DEG) / 2.0)),
+                D435I_DEPTH_HEIGHT * 0.5,
+                0.0,
+                0.0,
+                1.0,
+            ],
             width=D435I_DEPTH_WIDTH,
             height=D435I_DEPTH_HEIGHT,
-            clipping_range=(0.1, D435I_DEPTH_MAX),
+            focal_length=1.0,
         ),
-        width=D435I_DEPTH_WIDTH,
-        height=D435I_DEPTH_HEIGHT,
-        depth_clipping_behavior="max",
+        debug_vis=False,
     )
 
 ##
@@ -291,20 +327,17 @@ class D435iObservationsCfg(ObservationsCfg):
         """Depth observation for the student/policy encoder."""
 
         depth_image = ObsTerm(
-            func=mdp.depth_image,
+            func=process_depth_image,
             params={
                 "sensor_cfg": SceneEntityCfg("front_depth_camera"),
                 "data_type": "distance_to_image_plane",
-                "decimation": D435I_DEPTH_DECIMATION,
-                "crop_size": D435I_DEPTH_CROP_SIZE,
+                "image_shape": D435I_DEPTH_IMAGE_SHAPE,
                 "max_depth": D435I_DEPTH_MAX,
                 "normalize": True,
-                "ignore_zero": False,
-                "enable_augmentation": True,
-                "augmentation_cfg_group": "depth",
+                "use_delay": True,
+                "enable_noise": True,
                 "noise_std": 0.02,
                 "dropout_prob": 0.2,
-                "scale_range": (0.95, 1.05),
             },
             clip=(0.0, 5.0),
             scale=0.5,
@@ -319,16 +352,15 @@ class D435iObservationsCfg(ObservationsCfg):
         """Unaugmented depth observation for the teacher/critic input."""
 
         depth_image = ObsTerm(
-            func=mdp.depth_image,
+            func=process_depth_image,
             params={
                 "sensor_cfg": SceneEntityCfg("front_depth_camera"),
                 "data_type": "distance_to_image_plane",
-                "decimation": D435I_DEPTH_DECIMATION,
-                "crop_size": D435I_DEPTH_CROP_SIZE,
+                "image_shape": D435I_DEPTH_IMAGE_SHAPE,
                 "max_depth": D435I_DEPTH_MAX,
                 "normalize": True,
-                "ignore_zero": False,
-                "enable_augmentation": False,
+                "use_delay": False,
+                "enable_noise": False,
             },
             clip=(0.0, 5.0),
             scale=0.5,
@@ -615,8 +647,6 @@ class Go2D435iEnvCfg(Go2EnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-        self.num_rerenders_on_reset = 1
-        self.sim.render_interval = max(self.decimation, round(D435I_CAMERA_UPDATE_PERIOD / self.sim.dt))
         if self.scene.front_depth_camera is not None:
             self.scene.front_depth_camera.update_period = D435I_CAMERA_UPDATE_PERIOD
                 

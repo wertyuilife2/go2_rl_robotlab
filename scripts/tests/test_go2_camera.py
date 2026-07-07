@@ -1,7 +1,7 @@
 """Run the Go2 D435i depth camera demo with the exported MoE-CTS policy.
 
 Example:
-    python scripts/tests/test_go2_camera.py --headless --enable_cameras
+    python scripts/tests/test_go2_camera.py --headless
 """
 
 from __future__ import annotations
@@ -45,7 +45,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--real-time", action="store_true", default=False, help="Throttle to the environment step time.")
     AppLauncher.add_app_launcher_args(parser)
     args_cli = parser.parse_args()
-    args_cli.enable_cameras = True
     return args_cli
 
 
@@ -80,15 +79,15 @@ def normalized_depth_obs_stats(depth_obs: torch.Tensor) -> str:
 def refresh_depth(env, reset_index: int, output_dir: Path | None = None) -> torch.Tensor:
     from isaaclab.managers import SceneEntityCfg
 
-    import robot_lab.tasks.go2.mdp as mdp
+    from robot_lab.sensors import depth_image
 
-    env.unwrapped.sim.render()
     camera = env.unwrapped.scene["front_depth_camera"]
     depth = camera.data.output["distance_to_image_plane"].detach().clone()
-    depth_obs = mdp.depth_image_60x60(
+    depth_obs = depth_image(
         env.unwrapped,
         sensor_cfg=SceneEntityCfg("front_depth_camera"),
-        enable_augmentation=False,
+        use_delay=True,
+        enable_noise=False,
     ).detach().clone()
     print(f"[depth reset {reset_index:03d}] {depth_stats(depth)}")
     print(f"[depth obs reset {reset_index:03d}] {normalized_depth_obs_stats(depth_obs)}")
@@ -119,7 +118,8 @@ def run(args_cli: argparse.Namespace) -> None:
         env_cfg.observations.policy.enable_corruption = False
         if hasattr(env_cfg.observations, "depth"):
             env_cfg.observations.depth.enable_corruption = False
-        env_cfg.num_rerenders_on_reset = max(getattr(env_cfg, "num_rerenders_on_reset", 0), 1)
+        if hasattr(env_cfg.scene, "front_depth_camera") and env_cfg.scene.front_depth_camera is not None:
+            env_cfg.scene.front_depth_camera.debug_vis = True
         print(f"[INFO] Creating environment: {args_cli.task} ({args_cli.num_envs} env)")
 
         if hasattr(env_cfg.events, "randomize_push_robot"):
@@ -134,7 +134,10 @@ def run(args_cli: argparse.Namespace) -> None:
         policy = torch.jit.load(str(checkpoint), map_location=env.unwrapped.device).eval()
         policy.reset()
         print(f"[INFO] Loaded TorchScript policy: {checkpoint}")
-        print(f"[INFO] Camera prim: {env.unwrapped.scene['front_depth_camera'].cfg.prim_path}")
+        camera = env.unwrapped.scene["front_depth_camera"]
+        camera.set_debug_vis(True)
+        print(f"[INFO] Camera prim: {camera.cfg.prim_path}")
+        print("[INFO] Ray-caster camera debug visualization enabled.")
 
         output_dir = Path(args_cli.output_dir).expanduser().resolve() if args_cli.save_depth else None
         obs, _ = env.reset()

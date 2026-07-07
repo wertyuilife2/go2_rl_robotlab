@@ -181,12 +181,22 @@ class Go2SymmetryMapper:
             return value.reshape(*value.shape[:-1], ny, nx).flip(-2).reshape_as(value)
         return value.reshape(*value.shape[:-1], nx, ny).flip(-1).reshape_as(value)
 
-    def reverse_depth_image(self, value: torch.Tensor) -> torch.Tensor:
-        """Horizontally flip a flattened square depth image."""
-        side = math.isqrt(value.shape[-1])
-        if side * side != value.shape[-1]:
+    def reverse_depth_image(self, cfg, value: torch.Tensor) -> torch.Tensor:
+        """Horizontally flip a flattened depth image."""
+        image_shape = None
+        params = getattr(cfg, "params", {})
+        if isinstance(params, dict):
+            image_shape = params.get("image_shape") or params.get("crop_size")
+        if image_shape is None:
+            side = math.isqrt(value.shape[-1])
+            if side * side != value.shape[-1]:
+                return value
+            image_shape = (side, side)
+
+        height, width = image_shape
+        if height * width != value.shape[-1]:
             return value
-        return value.reshape(*value.shape[:-1], side, side).flip(-1).reshape_as(value)
+        return value.reshape(*value.shape[:-1], height, width).flip(-1).reshape_as(value)
 
     def reverse_term(self, name: str, cfg, value: torch.Tensor) -> torch.Tensor:
         """Mirror one observation term according to its semantic name.
@@ -208,7 +218,7 @@ class Go2SymmetryMapper:
         if name == "height_scan":
             return self.reverse_height_scan(cfg, value)
         if name == "depth_image":
-            return self.reverse_depth_image(value)
+            return self.reverse_depth_image(cfg, value)
         return value
 
     def reverse_obs_group(self, group_name: str, value: torch.Tensor) -> torch.Tensor:
