@@ -122,7 +122,7 @@ class DepthCNNGRUEncoder(nn.Module):
 
 
 class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
-    """MoE CTS actor-critic with depth CNN-GRU encoders for student and teacher."""
+    """MoE CTS actor-critic with a depth CNN-GRU encoder for the student."""
 
     is_recurrent: bool = True
 
@@ -145,7 +145,6 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
         latent_dim: int = 32,
         norm_type: str = "l2norm",
         actor_image_obs_groups: Iterable[str] | None = None,
-        critic_image_obs_groups: Iterable[str] | None = None,
         image_shape: tuple[int, int] = (60, 60),
         cnn_channels: tuple[int, int, int] = (16, 32, 64),
         cnn_kernel_size: int = 3,
@@ -170,16 +169,11 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
         self.num_actions = num_actions
         self.obs_groups = obs_groups
         self.actor_image_obs_groups = list(actor_image_obs_groups or self._infer_image_groups(obs, obs_groups["policy"]))
-        self.critic_image_obs_groups = list(
-            critic_image_obs_groups or self._infer_image_groups(obs, obs_groups["critic"])
-        )
         if not self.actor_image_obs_groups:
             raise ValueError("ActorCriticMoECTSCNNGRU requires at least one actor image observation group.")
-        if not self.critic_image_obs_groups:
-            raise ValueError("ActorCriticMoECTSCNNGRU requires at least one critic image observation group.")
 
         self.actor_obs_groups_1d = [group for group in obs_groups["policy"] if group not in self.actor_image_obs_groups]
-        self.critic_obs_groups_1d = [group for group in obs_groups["critic"] if group not in self.critic_image_obs_groups]
+        self.critic_obs_groups_1d = list(obs_groups["critic"])
         self.num_actor_obs = sum(obs[group].shape[-1] for group in self.actor_obs_groups_1d)
         self.num_critic_obs = sum(obs[group].shape[-1] for group in self.critic_obs_groups_1d)
         self.num_single_obs = obs["single_obs"].shape[-1]
@@ -197,21 +191,9 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
             gru_num_layers=gru_num_layers,
             activation=activation,
         )
-        self.teacher_cnn_gru = DepthCNNGRUEncoder(
-            image_shape=self.image_shape,
-            in_channels=self._image_channels(obs, self.critic_image_obs_groups),
-            cnn_channels=tuple(cnn_channels),
-            kernel_size=cnn_kernel_size,
-            stride=cnn_stride,
-            padding=cnn_padding,
-            pooled_shape=tuple(cnn_pooled_shape),
-            gru_hidden_dim=gru_hidden_dim,
-            gru_num_layers=gru_num_layers,
-            activation=activation,
-        )
 
         self.teacher_encoder = nn.Sequential(
-            MLP(self.num_critic_obs + gru_hidden_dim, latent_dim, list(teacher_encoder_hidden_dims), activation=activation),
+            MLP(self.num_critic_obs, latent_dim, list(teacher_encoder_hidden_dims), activation=activation),
             L2Norm() if norm_type == "l2norm" else SimNorm(),
         )
         self.student_moe_encoder = StudentMoEEncoder(
@@ -223,7 +205,6 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
             norm_type=norm_type,
         )
         print(f"Student CNN-GRU: {self.student_cnn_gru}")
-        print(f"Teacher CNN-GRU: {self.teacher_cnn_gru}")
         print(f"Teacher Encoder: {self.teacher_encoder}")
         print(f"Student MoE Encoder: {self.student_moe_encoder}")
 
@@ -311,7 +292,6 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
 
     def reset(self, dones: torch.Tensor | None = None) -> None:
         self.student_cnn_gru.reset(dones)
-        self.teacher_cnn_gru.reset(dones)
 
     def forward(self) -> NoReturn:
         raise NotImplementedError
@@ -391,9 +371,7 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
         update_memory: bool = False,
     ) -> torch.Tensor:
         obs_c = self._normalize_critic_obs(obs, masks)
-        image = self._image_obs(obs, self.critic_image_obs_groups)
-        image_feature = self.teacher_cnn_gru(image, masks=masks, hidden_state=hidden_state, update_hidden=update_memory)
-        return self.teacher_encoder(torch.cat([obs_c, image_feature], dim=-1))
+        return self.teacher_encoder(obs_c)
 
     def act(
         self,
@@ -480,10 +458,7 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
         student_hidden_state = (
             None if self.student_cnn_gru.hidden_state is None else self.student_cnn_gru.hidden_state.detach()
         )
-        teacher_hidden_state = (
-            None if self.teacher_cnn_gru.hidden_state is None else self.teacher_cnn_gru.hidden_state.detach()
-        )
-        return student_hidden_state, teacher_hidden_state
+        return student_hidden_state, None
 
     def update_normalization(self, obs: TensorDict) -> None:
         if self.actor_obs_normalization:
@@ -499,7 +474,6 @@ class ActorCriticMoECTSCNNGRU(ActorCriticMoECTS):
         if hasattr(self, "log_std"):
             noise_params.append(self.log_std)
         return [
-            {"params": self.teacher_cnn_gru.parameters()},
             {"params": self.teacher_encoder.parameters()},
             {"params": self.critic.parameters()},
             {"params": self.actor.parameters()},

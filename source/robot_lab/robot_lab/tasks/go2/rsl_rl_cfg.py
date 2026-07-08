@@ -55,7 +55,6 @@ class RslRlMoeCtsActorCriticCfg(RslRlPpoActorCriticCfg):
 class RslRlMoeCtsCnnGruActorCriticCfg(RslRlMoeCtsActorCriticCfg):
     class_name = "ActorCriticMoECTSCNNGRU"
     actor_image_obs_groups = ["depth"]
-    critic_image_obs_groups = ["privileged_depth"]
     image_shape = (60, 60)
     cnn_channels = (16, 32, 64)
     cnn_kernel_size = 3
@@ -103,7 +102,7 @@ class MoECTSD435iRunnerCfg(MoECTSRunnerCfg):
     policy = RslRlMoeCtsCnnGruActorCriticCfg()
     obs_groups = {
         "policy": ["policy", "depth"],
-        "critic": ["critic", "privileged_depth"],
+        "critic": ["critic"],
     }
 
     def __post_init__(self):

@@ -225,10 +225,29 @@ class RolloutStorageCTS:
                 student_start = self.teacher_num_envs + i * student_mini_batch_size
                 student_stop = self.teacher_num_envs + (i + 1) * student_mini_batch_size
 
-                teacher_obs, teacher_masks = split_and_pad_trajectories(
-                    self.observations[:, teacher_start:teacher_stop],
-                    self.dones[:, teacher_start:teacher_stop],
-                )
+                if self.saved_hidden_state_c is None:
+                    teacher_obs = self.observations[:, teacher_start:teacher_stop]
+                    teacher_masks = torch.ones(
+                        self.num_transitions_per_env,
+                        teacher_mini_batch_size,
+                        dtype=torch.bool,
+                        device=self.device,
+                    )
+                    teacher_hidden_state_a = self._get_initial_hidden_state_segment(
+                        self.saved_hidden_state_a, teacher_start, teacher_stop
+                    )
+                    teacher_hidden_state_c = None
+                else:
+                    teacher_obs, teacher_masks = split_and_pad_trajectories(
+                        self.observations[:, teacher_start:teacher_stop],
+                        self.dones[:, teacher_start:teacher_stop],
+                    )
+                    teacher_hidden_state_a = self._get_hidden_state_segment(
+                        self.saved_hidden_state_a, teacher_start, teacher_stop
+                    )
+                    teacher_hidden_state_c = self._get_hidden_state_segment(
+                        self.saved_hidden_state_c, teacher_start, teacher_stop
+                    )
                 student_obs, student_masks = split_and_pad_trajectories(
                     self.observations[:, student_start:student_stop],
                     self.dones[:, student_start:student_stop],
@@ -263,12 +282,6 @@ class RolloutStorageCTS:
                     dim=1,
                 )
 
-                teacher_hidden_state_a = self._get_hidden_state_segment(
-                    self.saved_hidden_state_a, teacher_start, teacher_stop
-                )
-                teacher_hidden_state_c = self._get_hidden_state_segment(
-                    self.saved_hidden_state_c, teacher_start, teacher_stop
-                )
                 student_hidden_state_a = self._get_hidden_state_segment(
                     self.saved_hidden_state_a, student_start, student_stop
                 )
@@ -320,20 +333,39 @@ class RolloutStorageCTS:
         ]
         return hidden_state_batch[0] if len(hidden_state_batch) == 1 else tuple(hidden_state_batch)
 
+    def _get_initial_hidden_state_segment(self, saved_hidden_state, env_start: int, env_stop: int):
+        if saved_hidden_state is None:
+            return None
+
+        hidden_state_batch = [
+            saved_hidden_state_i[0, :, env_start:env_stop].contiguous() for saved_hidden_state_i in saved_hidden_state
+        ]
+        return hidden_state_batch[0] if len(hidden_state_batch) == 1 else tuple(hidden_state_batch)
+
     def _save_hidden_states(self, hidden_states: tuple[HiddenState, HiddenState]) -> None:
         if hidden_states == (None, None):
             return
-        hidden_state_a = hidden_states[0] if isinstance(hidden_states[0], tuple) else (hidden_states[0],)
-        hidden_state_c = hidden_states[1] if isinstance(hidden_states[1], tuple) else (hidden_states[1],)
-        if self.saved_hidden_state_a is None:
+
+        def as_tuple(hidden_state):
+            if hidden_state is None:
+                return None
+            return hidden_state if isinstance(hidden_state, tuple) else (hidden_state,)
+
+        hidden_state_a = as_tuple(hidden_states[0])
+        hidden_state_c = as_tuple(hidden_states[1])
+        if self.saved_hidden_state_a is None and hidden_state_a is not None:
             self.saved_hidden_state_a = [
                 torch.zeros(self.observations.shape[0], *hidden_state_a[i].shape, device=self.device)
                 for i in range(len(hidden_state_a))
             ]
+        if self.saved_hidden_state_c is None and hidden_state_c is not None:
             self.saved_hidden_state_c = [
                 torch.zeros(self.observations.shape[0], *hidden_state_c[i].shape, device=self.device)
                 for i in range(len(hidden_state_c))
             ]
-        for i in range(len(hidden_state_a)):
-            self.saved_hidden_state_a[i][self.step].copy_(hidden_state_a[i])
-            self.saved_hidden_state_c[i][self.step].copy_(hidden_state_c[i])
+        if hidden_state_a is not None:
+            for i in range(len(hidden_state_a)):
+                self.saved_hidden_state_a[i][self.step].copy_(hidden_state_a[i])
+        if hidden_state_c is not None:
+            for i in range(len(hidden_state_c)):
+                self.saved_hidden_state_c[i][self.step].copy_(hidden_state_c[i])

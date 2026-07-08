@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026.7.8 v1.2
+
+1. Remove `CnnGru` encoder from teacher network
+
 ## 2026.7.7 v1.1
 
 1. Change `TiledCamera` to `RayCasterCamera`, and create a new [`DelayRayCasterCamera`](source/robot_lab/robot_lab/sensors/delay_ray_caster_camera.py) for delayed camera for 100ms

@@ -347,31 +347,7 @@ class D435iObservationsCfg(ObservationsCfg):
             self.enable_corruption = True
             self.concatenate_terms = True
 
-    @configclass
-    class PrivilegedDepthCfg(ObsGroup):
-        """Unaugmented depth observation for the teacher/critic input."""
-
-        depth_image = ObsTerm(
-            func=process_depth_image,
-            params={
-                "sensor_cfg": SceneEntityCfg("front_depth_camera"),
-                "data_type": "distance_to_image_plane",
-                "image_shape": D435I_DEPTH_IMAGE_SHAPE,
-                "max_depth": D435I_DEPTH_MAX,
-                "normalize": True,
-                "use_delay": False,
-                "enable_noise": False,
-            },
-            clip=(0.0, 5.0),
-            scale=0.5,
-        )
-
-        def __post_init__(self):
-            self.enable_corruption = False
-            self.concatenate_terms = True
-
     depth: DepthCfg = DepthCfg()
-    privileged_depth: PrivilegedDepthCfg = PrivilegedDepthCfg()
 
 @configclass
 class EventCfg:
