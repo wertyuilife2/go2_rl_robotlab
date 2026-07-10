@@ -18,6 +18,19 @@ from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
+
+def terrain_roughness(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("height_scanner"),
+) -> torch.Tensor:
+    """Compute terrain-height standard deviation around each robot."""
+    sensor: RayCaster = env.scene[sensor_cfg.name]
+    ray_hits_z = sensor.data.ray_hits_w[..., 2]
+    invalid = ~torch.isfinite(ray_hits_z).all(dim=1) | (torch.abs(ray_hits_z).amax(dim=1) > 1e6)
+    roughness = torch.std(ray_hits_z, dim=1)
+    return roughness.masked_fill(invalid, torch.inf)
+
+
 def _get_base_height(
     env: ManagerBasedRLEnv,
     base_height_target: float,
@@ -130,6 +143,33 @@ def joint_pos_penalty_l1(
         running_reward,
         stand_still_scale * running_reward,
     )
+    return reward
+
+
+def joint_pos_penalty_l1_with_terrain(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    stand_still_scale: float,
+    rough_terrain_scale: float,
+    velocity_threshold: float,
+    command_threshold: float,
+    height_threshold: float = 0.03,
+) -> torch.Tensor:
+    """Scale joint-position error based on motion state and local terrain roughness."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1)
+    body_vel = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
+    flat_terrain = terrain_roughness(env, sensor_cfg) < height_threshold
+    stand_still = (cmd < command_threshold) & (body_vel < velocity_threshold)
+    running_reward = torch.linalg.norm(
+        (asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]),
+        dim=1,
+        ord=1,
+    )
+    reward = torch.where(stand_still, stand_still_scale * running_reward, running_reward)
+    reward = torch.where(flat_terrain, reward, rough_terrain_scale * reward)
     return reward
 
 
@@ -558,7 +598,6 @@ def hip_pos_penalty_l1(
         command_threshold: float,
 ) -> torch.Tensor:
     """Penalize joint position error from default on the articulation."""
-    # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     command = env.command_manager.get_command(command_name)[:, [1, 2]]
     cmd_large = torch.any(torch.abs(command) > command_threshold, dim=1)
@@ -571,6 +610,7 @@ def hip_pos_penalty_l1(
         stand_still_scale * running_reward
     )
     return reward
+
 
 def feet_regulation(
     env: ManagerBasedRLEnv,

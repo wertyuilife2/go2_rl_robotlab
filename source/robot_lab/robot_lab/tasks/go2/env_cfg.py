@@ -413,24 +413,31 @@ class RewardsCfg:
         },
     )
     hip_pos_penalty_l1 = RewTerm(
-        func=mdp.hip_pos_penalty_l1,
-        weight=-0.05,
+        func=mdp.joint_pos_penalty_l1_with_terrain,
+        weight=-0.1,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hip_joint"),
-            "stand_still_scale": 1.0,
+            "sensor_cfg": SceneEntityCfg("height_scanner_small"),
+            "stand_still_scale": 5.0,
+            "rough_terrain_scale": 0.1,
+            "velocity_threshold": 0.3,
             "command_threshold": 0.1,
+            "height_threshold": 0.03,
         },
     )
     joint_pos_penalty_l1 = RewTerm(
-        func=mdp.joint_pos_penalty_l1,
-        weight=-0.01,
+        func=mdp.joint_pos_penalty_l1_with_terrain,
+        weight=-0.02,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*_(thigh|calf)_joint"),
-            "stand_still_scale": 1.0,
-            "velocity_threshold": 0.1,
+            "sensor_cfg": SceneEntityCfg("height_scanner_small"),
+            "stand_still_scale": 5.0,
+            "rough_terrain_scale": 0.1,
+            "velocity_threshold": 0.3,
             "command_threshold": 0.1,
+            "height_threshold": 0.03,
         },
     )
     
