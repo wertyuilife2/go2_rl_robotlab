@@ -260,11 +260,11 @@ class Go2SymmetryMapper:
         return torch.cat([obs, self.reverse_obs(obs)], dim=0), torch.cat([actions, self.reverse_joints(actions)], dim=0)
 
 
-class Go2MoECTSSymmetry:
-    """Go2 symmetry augmentation helpers for MoECTS segmented mini-batches."""
+class Go2Symmetry:
+    """Go2 symmetry augmentation for PPO and MoE-CTS mini-batches."""
 
     def __init__(self, env) -> None:
-        """Create the MoECTS symmetry wrapper.
+        """Create the shared Go2 symmetry wrapper.
 
         Args:
             env: Vectorized IsaacLab environment or wrapper.
@@ -272,6 +272,18 @@ class Go2MoECTSSymmetry:
         self.env = env
         self.mapper = Go2SymmetryMapper(env)
         self.num_aug = 2
+
+    def repeat_batch(self, value: torch.Tensor) -> torch.Tensor:
+        """Repeat a PPO tensor for its original and mirrored samples.
+
+        Args:
+            value: Tensor aligned with the original PPO mini-batch.
+
+        Returns:
+            Tensor ordered as ``[original, mirrored]``.
+        """
+        repeat_shape = (self.num_aug, *([1] * (value.ndim - 1)))
+        return value.repeat(repeat_shape)
 
     def get_original_mask(self, teacher_samples: int, student_samples: int, device: torch.device) -> torch.Tensor:
         """Return a boolean mask for the original samples in an augmented batch.
@@ -317,11 +329,11 @@ class Go2MoECTSSymmetry:
         old_mu_batch: torch.Tensor,
         old_sigma_batch: torch.Tensor,
     ) -> tuple[TensorDict, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Append mirrored samples to one teacher or student segment.
+        """Append mirrored samples to a contiguous action-data segment.
 
         Args:
-            obs_batch: Segment observation batch.
-            actions_batch: Segment action batch.
+            obs_batch: Observation segment.
+            actions_batch: Action segment.
             old_mu_batch: Stored action mean for the segment.
             old_sigma_batch: Stored action standard deviation for the segment.
 
@@ -336,7 +348,63 @@ class Go2MoECTSSymmetry:
             torch.cat([old_sigma_batch, self.mapper.permute_joints(old_sigma_batch)], dim=0),
         )
 
-    def augment_batch(
+    def augment_ppo_batch(
+        self,
+        obs_batch: TensorDict,
+        actions_batch: torch.Tensor,
+        target_values_batch: torch.Tensor,
+        advantages_batch: torch.Tensor,
+        returns_batch: torch.Tensor,
+        old_actions_log_prob_batch: torch.Tensor,
+        old_mu_batch: torch.Tensor,
+        old_sigma_batch: torch.Tensor,
+    ) -> tuple[
+        TensorDict,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        """Append mirrored samples to one PPO mini-batch.
+
+        Rollout targets are copied for the mirrored transitions. Stored action
+        means are mirrored like actions, while standard deviations are only
+        permuted to keep distribution scales non-negative.
+
+        Args:
+            obs_batch: Observation mini-batch.
+            actions_batch: Action mini-batch.
+            target_values_batch: Stored value targets.
+            advantages_batch: Advantage estimates.
+            returns_batch: Return targets.
+            old_actions_log_prob_batch: Stored action log probabilities.
+            old_mu_batch: Stored action mean from rollout collection.
+            old_sigma_batch: Stored action standard deviation from rollout collection.
+
+        Returns:
+            PPO tensors ordered as original samples followed by mirrored samples.
+        """
+        obs_batch, actions_batch, old_mu_batch, old_sigma_batch = self.augment_segment(
+            obs_batch,
+            actions_batch,
+            old_mu_batch,
+            old_sigma_batch,
+        )
+        return (
+            obs_batch,
+            actions_batch,
+            self.repeat_batch(target_values_batch),
+            self.repeat_batch(advantages_batch),
+            self.repeat_batch(returns_batch),
+            self.repeat_batch(old_actions_log_prob_batch),
+            old_mu_batch,
+            old_sigma_batch,
+        )
+
+    def augment_moe_cts_batch(
         self,
         obs_batch: TensorDict,
         actions_batch: torch.Tensor,
@@ -375,7 +443,7 @@ class Go2MoECTSSymmetry:
             teacher_samples: Number of teacher samples in the original mini-batch.
 
         Returns:
-            Augmented batch tensors and the augmentation count.
+            Augmented batch tensors in segmented MoE-CTS order.
         """
         teacher_obs, teacher_actions, teacher_mu, teacher_sigma = self.augment_segment(
             obs_batch[:teacher_samples],
@@ -400,7 +468,7 @@ class Go2MoECTSSymmetry:
             torch.cat([teacher_sigma, student_sigma], dim=0),
         )
 
-    def augment_batch_generator(self, generator, teacher_samples: int):
+    def augment_moe_cts_batch_generator(self, generator, teacher_samples: int):
         """Yield original-plus-mirrored MoECTS mini-batches from storage.
 
         Args:
@@ -431,7 +499,7 @@ class Go2MoECTSSymmetry:
                 old_actions_log_prob_batch,
                 old_mu_batch,
                 old_sigma_batch,
-            ) = self.augment_batch(
+            ) = self.augment_moe_cts_batch(
                 obs_batch,
                 actions_batch,
                 target_values_batch,

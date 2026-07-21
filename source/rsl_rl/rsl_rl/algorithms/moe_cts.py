@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -15,7 +17,6 @@ import itertools
 from rsl_rl.modules import ActorCriticMoECTS
 from rsl_rl.modules.rnd import RandomNetworkDistillation
 from rsl_rl.storage import RolloutStorageCTS
-from robot_lab.tasks.go2.mdp.symmetry import Go2MoECTSSymmetry
 
 
 class MoECTS:
@@ -48,7 +49,7 @@ class MoECTS:
         teacher_env_ratio: float = 0.75,
         normalize_advantage_per_mini_batch: bool = False,
         device: str = "cpu",
-        symmetry: Go2MoECTSSymmetry | None = None,
+        symmetry: Any | None = None,
         # RND parameters
         rnd_cfg: dict | None = None,
         # Distributed training parameters
@@ -244,7 +245,7 @@ class MoECTS:
         if self.symmetry is not None:
             num_aug = self.symmetry.num_aug
             mask = self.symmetry.get_original_mask(teacher_samples, student_samples, self.device)
-            generator = self.symmetry.augment_batch_generator(generator, teacher_samples)
+            generator = self.symmetry.augment_moe_cts_batch_generator(generator, teacher_samples)
         data = list(generator)
         teacher_samples *= num_aug
         student_samples *= num_aug

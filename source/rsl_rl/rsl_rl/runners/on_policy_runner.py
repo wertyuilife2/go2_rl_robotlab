@@ -7,8 +7,11 @@ from __future__ import annotations
 
 import os
 import time
-import torch
 import warnings
+
+import numpy as np
+import torch
+import yaml
 from tensordict import TensorDict
 
 from rsl_rl.algorithms import PPO
@@ -20,14 +23,38 @@ from rsl_rl.modules import (
     resolve_rnd_config,
 )
 from rsl_rl.storage import RolloutStorage
-from rsl_rl.utils import resolve_callable, resolve_obs_groups
+from rsl_rl.utils import export_ppo_policy_as_jit, resolve_callable, resolve_obs_groups
 from rsl_rl.utils.logger import Logger
+
+
+def _numpy_float_representer(dumper: yaml.SafeDumper, data: np.floating) -> yaml.Node:
+    """Represent a NumPy floating-point scalar as a YAML float."""
+    return dumper.represent_float(float(data))
+
+
+def _numpy_int_representer(dumper: yaml.SafeDumper, data: np.integer) -> yaml.Node:
+    """Represent a NumPy integer scalar as a YAML integer."""
+    return dumper.represent_int(int(data))
+
+
+yaml.add_representer(np.float32, _numpy_float_representer, Dumper=yaml.SafeDumper)
+yaml.add_representer(np.float64, _numpy_float_representer, Dumper=yaml.SafeDumper)
+yaml.add_representer(np.int32, _numpy_int_representer, Dumper=yaml.SafeDumper)
+yaml.add_representer(np.int64, _numpy_int_representer, Dumper=yaml.SafeDumper)
 
 
 class OnPolicyRunner:
     """On-policy runner for training and evaluation of actor-critic methods."""
 
     def __init__(self, env: VecEnv, train_cfg: dict, log_dir: str | None = None, device: str = "cpu") -> None:
+        """Initialize the PPO runner and its optional RoboGauge client.
+
+        Args:
+            env: Vectorized training environment.
+            train_cfg: Runner, policy, algorithm, and RoboGauge configuration.
+            log_dir: Directory used for checkpoints and metrics.
+            device: Torch device used for training.
+        """
         self.cfg = train_cfg
         self.policy_cfg = train_cfg["policy"]
         self.alg_cfg = train_cfg["algorithm"]
@@ -40,6 +67,7 @@ class OnPolicyRunner:
         # Query observations from environment for algorithm construction
         obs = self.env.get_observations()
         self.cfg["obs_groups"] = resolve_obs_groups(obs, self.cfg["obs_groups"], self._get_default_obs_sets())
+        self._robogauge_single_obs_dim = int(obs["single_obs"].shape[-1]) if "single_obs" in obs.keys() else None
 
         # Create the algorithm
         self.alg = self._construct_algorithm(obs)
@@ -58,7 +86,27 @@ class OnPolicyRunner:
 
         self.current_learning_iteration = 0
 
+        # RoboGauge client
+        try:
+            robogauge_cfg = train_cfg.get("robogauge", {})
+            if not robogauge_cfg.get("enabled", False):
+                raise ImportError("config disabled")
+            from robogauge.scripts.client import RoboGaugeClient
+
+            self.robogauge_client = RoboGaugeClient(f"http://127.0.0.1:{robogauge_cfg.get('port', 9973)}")
+            self.robogauge_client.wait_until_available()
+        except Exception as exc:
+            print(f"[INFO] RoboGauge client could not be initialized: {exc}, disabling RoboGauge interface.")
+            self.robogauge_client = None
+        self._logged_robogauge_steps: set[int] = set()
+
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None:
+        """Train the policy and evaluate scheduled checkpoints with RoboGauge.
+
+        Args:
+            num_learning_iterations: Number of policy update iterations to run.
+            init_at_random_ep_len: Whether to randomize initial episode progress.
+        """
         # Randomize initial episode lengths (for exploration)
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(
@@ -124,13 +172,34 @@ class OnPolicyRunner:
 
             # Save model
             if it % self.cfg["save_interval"] == 0:
-                self.save(os.path.join(self.logger.log_dir, f"model_{it}.pt"))  # type: ignore
+                self.save(
+                    os.path.join(self.logger.log_dir, f"model_{it}.pt"), it=it, last_model=False
+                )  # type: ignore
 
         # Save the final model after training
         if self.logger.log_dir is not None and not self.logger.disable_logs:
-            self.save(os.path.join(self.logger.log_dir, f"model_{self.current_learning_iteration}.pt"))
+            self.save(
+                os.path.join(self.logger.log_dir, f"model_{self.current_learning_iteration}.pt"),
+                it=self.current_learning_iteration,
+                last_model=True,
+            )
 
-    def save(self, path: str, infos: dict | None = None) -> None:
+    def save(
+        self,
+        path: str,
+        infos: dict | None = None,
+        *,
+        it: int | None = None,
+        last_model: bool = False,
+    ) -> None:
+        """Save a PPO checkpoint and update RoboGauge evaluation.
+
+        Args:
+            path: Destination checkpoint path.
+            infos: Optional metadata stored in the checkpoint.
+            it: Training step associated with the checkpoint.
+            last_model: Whether this is the final checkpoint of the run.
+        """
         # Save model
         saved_dict = {
             "model_state_dict": self.alg.policy.state_dict(),
@@ -147,6 +216,93 @@ class OnPolicyRunner:
 
         # Upload model to external logging services
         self.logger.save_model(path, self.current_learning_iteration)
+
+        robogauge_step = self.current_learning_iteration if it is None else it
+        self.update_robogauge(robogauge_step, last_model)
+
+    def update_robogauge(self, it: int, last_model: bool) -> None:
+        """Submit PPO checkpoints and record RoboGauge evaluation results.
+
+        A JIT policy is submitted every 500 iterations and for the final model.
+        The final submission is monitored until its result arrives.
+
+        Args:
+            it: Training step associated with the checkpoint.
+            last_model: Whether this is the final checkpoint of the run.
+        """
+        if self.robogauge_client is None or self.logger.log_dir is None or self.logger.disable_logs:
+            return
+
+        try:
+            if it % 500 == 0 or last_model:
+                jit_dir = os.path.join(self.logger.log_dir, "jit_models")
+                jit_path = os.path.join(jit_dir, f"policy_jit_{it}.pt")
+                if self._robogauge_single_obs_dim is None:
+                    raise ValueError("RoboGauge PPO export requires a 'single_obs' observation group.")
+                normalizer = getattr(self.alg.policy, "actor_obs_normalizer", None)
+                export_ppo_policy_as_jit(
+                    self.alg.policy,
+                    actor_obs_normalizer=normalizer,
+                    num_single_obs=self._robogauge_single_obs_dim,
+                    num_actions=self.env.num_actions,
+                    path=jit_dir,
+                    filename=f"policy_jit_{it}.pt",
+                )
+                self.robogauge_client.submit_task(
+                    model_path=jit_path,
+                    step=it,
+                    task_name="go2_lab",
+                    experiment_name=self.cfg["experiment_name"],
+                )
+        except Exception as exc:
+            print(f"[WARN] RoboGauge submit failed at step {it}: {exc}")
+            return
+
+        check_times = int(1e9) if last_model else 1
+        while check_times > 0:
+            check_times -= 1
+            try:
+                self.robogauge_client.monitor_tasks()
+            except Exception as exc:
+                print(f"[WARN] RoboGauge monitor failed at step {it}: {exc}")
+                break
+
+            results_dir = os.path.join(self.logger.log_dir, "robogauge_results")
+            os.makedirs(results_dir, exist_ok=True)
+            result_received = False
+
+            for task_id, response in self.robogauge_client.response_data.items():
+                if not isinstance(response, dict):
+                    print(f"[WARN] RoboGauge returned an invalid response for task {task_id}: {response}")
+                    continue
+                results = response.get("results")
+                step = response.get("step", it)
+                if results is None:
+                    print(f"[WARN] RoboGauge returned empty results for task {task_id} at step {step}.")
+                    continue
+                scores = results.get("scores")
+                if scores is None:
+                    print(f"[WARN] RoboGauge results for task {task_id} at step {step} do not contain 'scores'.")
+                    continue
+                if step == it:
+                    result_received = True
+                if step in self._logged_robogauge_steps:
+                    continue
+                if self.logger.writer is not None:
+                    for key, value in scores.items():
+                        self.logger.writer.add_scalar(f"RoboGauge/{key}", value, step)
+                results_path = os.path.join(results_dir, f"results_{step}.yaml")
+                with open(results_path, "w", encoding="utf-8") as file:
+                    yaml.safe_dump(results, file, allow_unicode=True, sort_keys=False)
+                self._logged_robogauge_steps.add(step)
+
+            if last_model and result_received:
+                print(f"RoboGauge result for step {it} received. Exiting wait loop.")
+                break
+
+            if check_times > 0:
+                print("Sleeping for 1 minute before checking RoboGauge results again...")
+                time.sleep(60)
 
     def load(self, path: str, load_optimizer: bool = True, map_location: str | None = None) -> dict:
         loaded_dict = torch.load(path, weights_only=False, map_location=map_location)
@@ -249,7 +405,12 @@ class OnPolicyRunner:
         """Construct the actor-critic algorithm."""
         # Resolve RND config if used
         self.alg_cfg = resolve_rnd_config(self.alg_cfg, obs, self.cfg["obs_groups"], self.env)
-        self.alg_cfg.pop("symmetry_cfg")
+
+        # Construct the task-specific symmetry helper when augmentation is enabled.
+        symmetry_cfg = self.alg_cfg.pop("symmetry_cfg", None)
+        symmetry = None
+        if symmetry_cfg is not None and symmetry_cfg["use_symmetric_augmentation"]:
+            symmetry = resolve_callable(symmetry_cfg["symmetry_class"])(self.env)
 
         # Resolve deprecated normalization config
         if self.cfg.get("empirical_normalization") is not None:
@@ -277,7 +438,12 @@ class OnPolicyRunner:
         # Initialize the algorithm
         alg_class = resolve_callable(self.alg_cfg.pop("class_name"))
         alg: PPO = alg_class(
-            actor_critic, storage, device=self.device, **self.alg_cfg, multi_gpu_cfg=self.multi_gpu_cfg
+            actor_critic,
+            storage,
+            device=self.device,
+            symmetry=symmetry,
+            **self.alg_cfg,
+            multi_gpu_cfg=self.multi_gpu_cfg,
         )
 
         return alg

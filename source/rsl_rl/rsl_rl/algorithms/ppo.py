@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -44,6 +46,8 @@ class PPO:
         rnd_cfg: dict | None = None,
         # Distributed training parameters
         multi_gpu_cfg: dict | None = None,
+        # Symmetry parameters
+        symmetry: Any | None = None,
     ) -> None:
         # Device-related parameters
         self.device = device
@@ -69,6 +73,11 @@ class PPO:
         else:
             self.rnd = None
             self.rnd_optimizer = None
+
+        # Symmetry components
+        self.symmetry = symmetry
+        if self.symmetry is not None and policy.is_recurrent:
+            raise ValueError("Symmetry augmentation is not supported for recurrent PPO policies.")
 
         # PPO components
         self.policy = policy
@@ -164,6 +173,11 @@ class PPO:
             st.advantages = (st.advantages - st.advantages.mean()) / (st.advantages.std() + 1e-8)
 
     def update(self) -> dict[str, float]:
+        """Update the PPO policy from rollout mini-batches.
+
+        Returns:
+            Mean losses collected across all PPO updates.
+        """
         mean_value_loss = 0
         mean_surrogate_loss = 0
         mean_entropy = 0
@@ -189,10 +203,34 @@ class PPO:
             hidden_states_batch,
             masks_batch,
         ) in generator:
+            original_batch_size = actions_batch.shape[0]
+
             # Check if we should normalize advantages per mini batch
             if self.normalize_advantage_per_mini_batch:
                 with torch.no_grad():
                     advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-8)
+
+            # Append mirrored observations, actions, and rollout targets.
+            if self.symmetry is not None:
+                (
+                    obs_batch,
+                    actions_batch,
+                    target_values_batch,
+                    advantages_batch,
+                    returns_batch,
+                    old_actions_log_prob_batch,
+                    old_mu_batch,
+                    old_sigma_batch,
+                ) = self.symmetry.augment_ppo_batch(
+                    obs_batch,
+                    actions_batch,
+                    target_values_batch,
+                    advantages_batch,
+                    returns_batch,
+                    old_actions_log_prob_batch,
+                    old_mu_batch,
+                    old_sigma_batch,
+                )
 
             # Recompute actions log prob and entropy for current batch of transitions
             # Note: We need to do this because we updated the policy with the new parameters
@@ -206,10 +244,19 @@ class PPO:
             # Compute KL divergence and adapt the learning rate
             if self.desired_kl is not None and self.schedule == "adaptive":
                 with torch.inference_mode():
+                    # Synthetic samples do not come from the rollout policy, so
+                    # use only original samples for adaptive KL scheduling.
                     kl = torch.sum(
-                        torch.log(sigma_batch / old_sigma_batch + 1.0e-5)
-                        + (torch.square(old_sigma_batch) + torch.square(old_mu_batch - mu_batch))
-                        / (2.0 * torch.square(sigma_batch))
+                        torch.log(
+                            sigma_batch[:original_batch_size] / old_sigma_batch[:original_batch_size] + 1.0e-5
+                        )
+                        + (
+                            torch.square(old_sigma_batch[:original_batch_size])
+                            + torch.square(
+                                old_mu_batch[:original_batch_size] - mu_batch[:original_batch_size]
+                            )
+                        )
+                        / (2.0 * torch.square(sigma_batch[:original_batch_size]))
                         - 0.5,
                         axis=-1,
                     )
@@ -258,7 +305,11 @@ class PPO:
             else:
                 value_loss = (returns_batch - value_batch).pow(2).mean()
 
-            loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean()
+            loss = (
+                surrogate_loss
+                + self.value_loss_coef * value_loss
+                - self.entropy_coef * entropy_batch[:original_batch_size].mean()
+            )
 
             # RND loss
             # TODO: Move this processing to inside RND module.
@@ -266,7 +317,7 @@ class PPO:
                 # Extract the rnd_state
                 # TODO: Check if we still need torch no grad. It is just an affine transformation.
                 with torch.no_grad():
-                    rnd_state_batch = self.rnd.get_rnd_state(obs_batch)
+                    rnd_state_batch = self.rnd.get_rnd_state(obs_batch[:original_batch_size])
                     rnd_state_batch = self.rnd.state_normalizer(rnd_state_batch)
                 # Predict the embedding and the target
                 predicted_embedding = self.rnd.predictor(rnd_state_batch)
@@ -297,7 +348,7 @@ class PPO:
             # Store the losses
             mean_value_loss += value_loss.item()
             mean_surrogate_loss += surrogate_loss.item()
-            mean_entropy += entropy_batch.mean().item()
+            mean_entropy += entropy_batch[:original_batch_size].mean().item()
             # RND loss
             if mean_rnd_loss is not None:
                 mean_rnd_loss += rnd_loss.item()

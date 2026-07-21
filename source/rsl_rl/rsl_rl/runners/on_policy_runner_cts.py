@@ -20,10 +20,8 @@ from rsl_rl.modules import (
     resolve_rnd_config,
 )
 from rsl_rl.storage import RolloutStorageCTS
-from rsl_rl.utils import resolve_obs_groups
+from rsl_rl.utils import export_cts_policy_as_jit, resolve_callable, resolve_obs_groups
 from rsl_rl.utils.logger_cts import LoggerCTS
-from rsl_rl.utils.exporter_cts import export_cts_policy_as_jit
-from rsl_rl.utils import resolve_callable
 
 
 def numpy_representer(dumper: yaml.SafeDumper, data: np.floating) -> yaml.Node:
@@ -384,8 +382,10 @@ class OnPolicyRunnerCTS:
         ).to(self.device)
 
         # Symmetry augmentation
-        symmetry_cfg = self.alg_cfg.pop("symmetry_cfg")
-        symmetry = resolve_callable(symmetry_cfg["symmetry_class"])(self.env) if symmetry_cfg["use_symmetric_augmentation"] else None
+        symmetry_cfg = self.alg_cfg.pop("symmetry_cfg", None)
+        symmetry = None
+        if symmetry_cfg is not None and symmetry_cfg["use_symmetric_augmentation"]:
+            symmetry = resolve_callable(symmetry_cfg["symmetry_class"])(self.env)
 
         # Initialize the storage
         storage = RolloutStorageCTS(

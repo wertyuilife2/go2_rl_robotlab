@@ -508,6 +508,6 @@ class Go2EnvCfg(ManagerBasedRLEnvCfg):
                 
 @configclass
 class Go2EnvSymmetryCfg(Go2EnvCfg):
-    """Environment configuration with symmetry augmentation for MoE CTS."""
+    """Environment configuration for symmetry-augmented training."""
     # Scene settings
     scene: Go2SceneCfg = Go2SceneCfg(num_envs=10900, env_spacing=0.5)

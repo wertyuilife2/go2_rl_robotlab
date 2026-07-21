@@ -6,9 +6,27 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Script to play a checkpoint if an RL agent from RSL-RL."""
+"""Play an RSL-RL checkpoint and export its deployment policies.
 
-"""Launch Isaac Sim Simulator first."""
+Overview:
+The script loads an Isaac Lab task and checkpoint, exports JIT and ONNX
+policies, and then runs the policy in the simulator.
+
+Quick Start:
+    python scripts/rsl_rl/play.py --task <task-id> --checkpoint <checkpoint> --headless
+
+Full Command:
+    python scripts/rsl_rl/play.py --task <task-id> --checkpoint <checkpoint> \
+        [--num_envs N] [--video] [--real-time] --headless
+
+Options:
+    --num_envs: Number of simulator environments.
+    --video: Record the policy rollout.
+    --real-time: Pace simulation at the configured control rate.
+
+Notes:
+    Isaac Sim is launched before the task, runner, and exporter modules are imported.
+"""
 
 import argparse
 import os
@@ -23,7 +41,6 @@ from isaaclab.app import AppLauncher
 
 # local imports
 import cli_args  # isort: skip
-from utils import export_cts_policy_as_jit, export_cts_policy_as_onnx
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
@@ -65,11 +82,19 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import time
+
+import gymnasium as gym
 import torch
+
 # from scripts.reinforcement_learning.utils import camera_follow
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner, OnPolicyRunnerCTS
+from rsl_rl.utils import (
+    export_cts_policy_as_jit,
+    export_cts_policy_as_onnx,
+    export_ppo_policy_as_jit,
+    export_ppo_policy_as_onnx,
+)
 
 from isaaclab.devices import Se2Keyboard, Se2KeyboardCfg
 from isaaclab.envs import (
@@ -83,16 +108,25 @@ from isaaclab.envs.mdp import UniformVelocityCommandCfg
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 # from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
-from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+from isaaclab_rl.rsl_rl import (
+    RslRlBaseRunnerCfg,
+    RslRlVecEnvWrapper,
+    export_policy_as_jit,
+    export_policy_as_onnx,
+)
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 import robot_lab.tasks  # noqa: F401
+
 
 def fix_commands(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg):
     """Fix commanded velocity to a constant target.
 
     Prefer locking the command generator to keep policy observations consistent
     with environment internal command state.
+
+    Args:
+        env_cfg: Environment configuration whose velocity command is fixed.
     """
     fixed_lin_x, fixed_lin_y, fixed_ang_z = 1.0, 0.0, 0.0
 
@@ -120,9 +154,15 @@ def fix_commands(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvC
     if hasattr(env_cfg, "curriculum") and hasattr(env_cfg.curriculum, "terrain_levels"):
         env_cfg.curriculum.terrain_levels = None
 
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
-    """Play with RSL-RL agent."""
+    """Load, export, and play an RSL-RL policy.
+
+    Args:
+        env_cfg: Environment configuration loaded for the selected task.
+        agent_cfg: RSL-RL runner configuration loaded for the selected agent.
+    """
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
 
@@ -227,8 +267,41 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # export policy to onnx/jit
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
     if agent_cfg.class_name == "OnPolicyRunnerCTS":
-        export_cts_policy_as_jit(policy_nn, actor_obs_normalizer=policy_nn.actor_obs_normalizer, single_obs_normalizer=policy_nn.single_obs_normalizer, path=export_model_dir, filename="policy.pt")
-        export_cts_policy_as_onnx(policy_nn, actor_obs_normalizer=policy_nn.actor_obs_normalizer, single_obs_normalizer=policy_nn.single_obs_normalizer, path=export_model_dir, filename="policy.onnx")
+        export_cts_policy_as_jit(
+            policy_nn,
+            actor_obs_normalizer=policy_nn.actor_obs_normalizer,
+            single_obs_normalizer=policy_nn.single_obs_normalizer,
+            path=export_model_dir,
+            filename="policy.pt",
+        )
+        export_cts_policy_as_onnx(
+            policy_nn,
+            actor_obs_normalizer=policy_nn.actor_obs_normalizer,
+            single_obs_normalizer=policy_nn.single_obs_normalizer,
+            path=export_model_dir,
+            filename="policy.onnx",
+        )
+    elif agent_cfg.class_name == "OnPolicyRunner":
+        current_obs = env.get_observations()
+        if "single_obs" not in current_obs.keys():
+            raise ValueError("PPO deployment export requires a 'single_obs' observation group.")
+        num_single_obs = int(current_obs["single_obs"].shape[-1])
+        export_ppo_policy_as_jit(
+            policy_nn,
+            actor_obs_normalizer=normalizer,
+            num_single_obs=num_single_obs,
+            num_actions=env.num_actions,
+            path=export_model_dir,
+            filename="policy.pt",
+        )
+        export_ppo_policy_as_onnx(
+            policy_nn,
+            actor_obs_normalizer=normalizer,
+            num_single_obs=num_single_obs,
+            num_actions=env.num_actions,
+            path=export_model_dir,
+            filename="policy.onnx",
+        )
     else:
         export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
         export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")

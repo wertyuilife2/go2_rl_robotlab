@@ -1,12 +1,21 @@
 from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
+
+@configclass
+class SymmetryCfg:
+    """Shared Go2 symmetry configuration for PPO and MoE-CTS."""
+
+    use_symmetric_augmentation: bool = False
+    symmetry_class: str = "robot_lab.tasks.go2.mdp.symmetry:Go2Symmetry"
+
+
 @configclass
 class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 300000
     save_interval = 500
-    experiment_name = "go2_rough" 
+    experiment_name = "go2_ppo_symmetry"
     
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
@@ -29,12 +38,8 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        symmetry_cfg=SymmetryCfg(use_symmetric_augmentation=True),
     )
-
-@configclass
-class MoeCtsSymmetryCfg:
-    use_symmetric_augmentation = False
-    symmetry_class = "robot_lab.tasks.go2.mdp.symmetry:Go2MoECTSSymmetry"
 
 @configclass
 class RslRlMoeCtsActorCriticCfg(RslRlPpoActorCriticCfg):
@@ -71,7 +76,7 @@ class RslRlMoeCtsAlgorithmCfg(RslRlPpoAlgorithmCfg):
     desired_kl = 0.01
     max_grad_norm = 1.0
     teacher_env_ratio = 0.75  # percentage of envs assigned to teacher
-    symmetry_cfg = MoeCtsSymmetryCfg()
+    symmetry_cfg = SymmetryCfg()
 
 @configclass
 class MoECTSRunnerCfg(RslRlOnPolicyRunnerCfg):

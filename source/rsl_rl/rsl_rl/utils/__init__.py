@@ -14,10 +14,14 @@ from .utils import (
     split_and_pad_trajectories,
     unpad_trajectories,
 )
-from .exporter_cts import export_cts_policy_as_jit
+from .exporter_cts import export_cts_policy_as_jit, export_cts_policy_as_onnx
+from .exporter_ppo import export_ppo_policy_as_jit, export_ppo_policy_as_onnx
 
 __all__ = [
     "export_cts_policy_as_jit",
+    "export_cts_policy_as_onnx",
+    "export_ppo_policy_as_jit",
+    "export_ppo_policy_as_onnx",
     "get_param",
     "resolve_callable",
     "resolve_nn_activation",

@@ -29,12 +29,22 @@ gym.register(
 )
 
 gym.register(
-    id="RobotLab-Go2-Symmetry-v1",
+    id="RobotLab-Go2-MoeCts-Symmetry-v1",
     entry_point="robot_lab.tasks.go2.env.go2_env:Go2Env",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.env_cfg:Go2EnvSymmetryCfg",
         "rsl_rl_cfg_entry_point": f"{__name__}.rsl_rl_cfg:MoECTSSymmetryRunnerCfg",
+    },
+)
+
+gym.register(
+    id="RobotLab-Go2-PPO-Symmetry-v1",
+    entry_point="robot_lab.tasks.go2.env.go2_env:Go2Env",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.env_cfg:Go2EnvSymmetryCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.rsl_rl_cfg:PPORunnerCfg",
     },
 )
 
