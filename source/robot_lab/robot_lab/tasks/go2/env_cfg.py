@@ -431,6 +431,14 @@ class RewardsCfg:
             "stand_still_scale": 10.0,
         },
     )
+    feet_slide = RewTerm(
+        func=mdp.feet_slide,
+        weight=-0.05,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAME),
+            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAME),
+        },
+    )
     
 @configclass
 class TerminationsCfg:

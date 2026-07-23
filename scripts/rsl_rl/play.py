@@ -63,6 +63,7 @@ parser.add_argument(
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 parser.add_argument("--keyboard", action="store_true", default=False, help="Whether to use keyboard.")
 parser.add_argument("--fix_commands", action="store_true", default=False, help="Fix the velocity commands.")
+parser.add_argument("--analyze", action="store_true", default=False, help="Analyze the policy rewards.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -117,6 +118,7 @@ from isaaclab_rl.rsl_rl import (
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 import robot_lab.tasks  # noqa: F401
+from play_analyzer import PlayAnalyzer  # isort: skip
 
 
 def fix_commands(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg):
@@ -128,7 +130,7 @@ def fix_commands(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvC
     Args:
         env_cfg: Environment configuration whose velocity command is fixed.
     """
-    fixed_lin_x, fixed_lin_y, fixed_ang_z = 1.0, 0.0, 0.0
+    fixed_lin_x, fixed_lin_y, fixed_ang_z = -1.0, 0.0, 0.0
 
     base_velocity_cfg = getattr(getattr(env_cfg, "commands", None), "base_velocity", None)
     if base_velocity_cfg is None:
@@ -209,6 +211,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # get anaylzer instance
+    analyzed_dir = os.path.join(os.path.dirname(resume_path), "analyzed")
+    analyzer = PlayAnalyzer(env.unwrapped, analyzed_dir, interval=1, enable=args_cli.analyze)
 
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
@@ -321,6 +327,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             actions = policy(obs)
             # env stepping
             obs, _, dones, _ = env.step(actions)
+            analyzer.update()
             # reset recurrent states for episodes that have terminated
             policy_nn.reset(dones)
         if args_cli.video:

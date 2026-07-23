@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026.7.23 v1.2
+1. Add `feet_slide=-0.05` to prevent the robot from sliding on the ground
+2. Add `play_analyzer` to `play.py` to analyze the reward distribution of different terrains
+
 ## 2026.7.20 v1.1
 
 Task `RobotLab-Go2-PPO-Symmetry-v1`:
