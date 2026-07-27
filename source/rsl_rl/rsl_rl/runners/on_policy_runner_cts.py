@@ -85,8 +85,9 @@ class OnPolicyRunnerCTS:
             self.robogauge_client = RoboGaugeClient(f"http://127.0.0.1:{robogauge_cfg.get('port', 9973)}")
             self.robogauge_client.wait_until_available()
         except Exception as e:
-            print(f"[INFO] RoboGauge client could not be initialized: {e}, disabling RoboGauge interface.")
-            self.robogauge_client = None
+            print(f"[ERROR] RoboGauge client could not be initialized: {e}, disabling RoboGauge interface.")
+            raise e
+        self._logged_robogauge_steps: set[int] = set()
 
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None:
         # Randomize initial episode lengths (for exploration)
@@ -242,12 +243,15 @@ class OnPolicyRunnerCTS:
                     continue
                 if step == it:
                     result_received = True
+                if step in self._logged_robogauge_steps:
+                    continue
                 if self.logger.writer is not None:
                     for key, val in scores.items():
                         self.logger.writer.add_scalar(f"RoboGauge/{key}", val, step)
                 results_path = os.path.join(results_dir, f"results_{step}.yaml")
                 with open(results_path, "w", encoding="utf-8") as f:
                     yaml.dump(results, f, allow_unicode=True, sort_keys=False)
+                self._logged_robogauge_steps.add(step)
 
             if last_model and result_received:
                 print(f"RoboGauge result for step {it} received. Exiting wait loop.")

@@ -1,3 +1,6 @@
+# DEBUG
+test_*
+
 # Omniverse
 **/*.dmp
 **/.thumbs
